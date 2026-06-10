@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.2.4)</title>
+    <title>Organic Spotify Playlist Builder (v1.2.5)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
 
-    <div class="max-w-md w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
+    <div class="max-w-lg w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.4</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.5</span>
         </div>
 
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -22,27 +22,65 @@
         <div class="mb-6">
             <label class="block text-sm font-medium mb-2 text-gray-400">2. Load AI Blacklist CSV</label>
             <input type="file" id="csv-file" accept=".csv" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 cursor-pointer">
+            <div class="flex items-center justify-between mt-2">
+                <p id="blacklist-status" class="text-xs text-gray-500">No blacklist loaded yet.</p>
+                <button id="clear-blacklist-btn" type="button" class="hidden text-xs text-red-300 hover:text-red-200 underline">
+                    Clear saved blacklist
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-6">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">3. Target Year</label>
+                <input type="number" id="target-year" min="1900" max="2100" value="2026" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">4. New Playlist Visibility</label>
+                <select id="playlist-visibility" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                </select>
+            </div>
         </div>
 
         <div class="mb-6">
-            <label class="block text-sm font-medium mb-2 text-gray-400">3. Select Target Music Pool</label>
+            <label class="block text-sm font-medium mb-2 text-gray-400">5. Select Target Music Pool</label>
+
             <select id="source-type" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 mb-3 cursor-pointer">
-                <option value="playlist">Scan My Playlist / Copied Playlist Link</option>
+                <option value="my-playlist">Choose From My Spotify Playlists</option>
+                <option value="manual-playlist">Paste Playlist Link / ID</option>
                 <option value="liked">My Entire Liked Songs Library</option>
             </select>
 
-            <input type="text" id="playlist-url" placeholder="Paste a playlist you own, follow, or copied into your library..." class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
+            <div id="my-playlists-panel">
+                <button id="load-playlists-btn" disabled type="button" class="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded mb-3 transition cursor-pointer">
+                    Load / Refresh My Playlists
+                </button>
 
-            <p id="playlist-help" class="mt-2 text-xs text-gray-500 leading-relaxed">
-                Tip: if a Spotify playlist will not scan, copy it into your own Spotify account first, then paste that copied playlist link here.
-            </p>
+                <select id="playlist-select" disabled class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
+                    <option value="">Log in, then load your playlists...</option>
+                </select>
+
+                <p id="playlist-access-status" class="mt-2 text-xs text-gray-500 leading-relaxed">
+                    Pick a playlist to check whether Spotify will let this app read it.
+                </p>
+            </div>
+
+            <div id="manual-playlist-panel" class="hidden">
+                <input type="text" id="playlist-url" placeholder="Paste a playlist you own, follow, or copied into your library..." class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
+                <p id="playlist-help" class="mt-2 text-xs text-gray-500 leading-relaxed">
+                    Tip: if a Spotify playlist will not scan, copy it into your own Spotify account first, then paste that copied playlist link here.
+                </p>
+            </div>
         </div>
 
         <button id="run-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition cursor-pointer">
-            4. Deep-Scan & Build 2026 Playlist
+            6. Deep-Scan & Build Playlist
         </button>
 
-        <div id="status-log" class="mt-6 text-xs text-gray-400 font-mono max-h-72 overflow-y-auto bg-black p-3 rounded border border-gray-800"></div>
+        <div id="status-log" class="mt-6 text-xs text-gray-400 font-mono max-h-80 overflow-y-auto bg-black p-3 rounded border border-gray-800"></div>
     </div>
 
     <script>
@@ -55,9 +93,21 @@
         const URL_ACCOUNTS = "https://accounts." + n1 + n2 + "." + d;
         const URL_API = "https://api." + n1 + n2 + "." + d + "/v1";
 
+        const LOCAL_STORAGE_BLACKLIST_KEY = "hmd_ai_artist_ids_v1";
+
         let accessToken = null;
         let aiArtistIds = new Set();
+        let userPlaylists = [];
+        let selectedPlaylistReadable = false;
+
         const logDiv = document.getElementById('status-log');
+        const loginButton = document.getElementById('login-btn');
+        const runButton = document.getElementById('run-btn');
+        const loadPlaylistsButton = document.getElementById('load-playlists-btn');
+        const playlistSelect = document.getElementById('playlist-select');
+        const playlistAccessStatus = document.getElementById('playlist-access-status');
+        const blacklistStatus = document.getElementById('blacklist-status');
+        const clearBlacklistButton = document.getElementById('clear-blacklist-btn');
 
         function escapeHtml(value) {
             return String(value)
@@ -78,22 +128,33 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.2.4");
+        function setStatus(element, text, tone = "neutral") {
+            element.innerText = text;
 
-        document.getElementById('source-type').addEventListener('change', (e) => {
-            const urlInput = document.getElementById('playlist-url');
-            const helpText = document.getElementById('playlist-help');
+            element.classList.remove("text-gray-500", "text-green-300", "text-yellow-300", "text-red-300");
 
-            if (e.target.value === 'playlist') {
-                urlInput.classList.remove('hidden');
-                helpText.classList.remove('hidden');
+            if (tone === "good") {
+                element.classList.add("text-green-300");
+            } else if (tone === "warn") {
+                element.classList.add("text-yellow-300");
+            } else if (tone === "bad") {
+                element.classList.add("text-red-300");
             } else {
-                urlInput.classList.add('hidden');
-                helpText.classList.add('hidden');
+                element.classList.add("text-gray-500");
             }
+        }
+
+        logger("⚙️ System Booted: Running Live Production Version v1.2.5");
+        loadStoredBlacklist();
+
+        document.getElementById('source-type').addEventListener('change', () => {
+            updateSourcePanels();
+            checkReady();
         });
 
-        document.getElementById('login-btn').addEventListener('click', () => {
+        document.getElementById('target-year').addEventListener('input', checkReady);
+
+        loginButton.addEventListener('click', () => {
             logger("Processing parameter sequence...");
 
             try {
@@ -164,11 +225,16 @@
 
                     accessToken = data.access_token;
 
-                    document.getElementById('login-btn').innerText = "✅ Logged In";
-                    document.getElementById('login-btn').className = "w-full bg-gray-700 text-white font-bold py-2 px-4 rounded mb-6";
+                    loginButton.innerText = "✅ Logged In";
+                    loginButton.className = "w-full bg-gray-700 text-white font-bold py-2 px-4 rounded mb-6";
+                    loadPlaylistsButton.removeAttribute('disabled');
 
                     logger("🎉 Access token generated. Engine ready for data parsing.");
                     checkReady();
+
+                    if (document.getElementById('source-type').value === "my-playlist") {
+                        loadUserPlaylists();
+                    }
                 })
                 .catch(err => {
                     logger(`❌ Core Engine Rejection: ${err.message}`);
@@ -188,13 +254,13 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    aiArtistIds.clear();
+                    const parsedIds = parseBlacklistRows(results.data);
 
-                    results.data.forEach(row => {
-                        if (row.id) aiArtistIds.add(row.id.trim());
-                    });
+                    aiArtistIds = new Set(parsedIds);
+                    saveBlacklistToLocalStorage();
 
                     logger(`Blacklist compiled into memory. Total AI profiles loaded: ${aiArtistIds.size}`);
+                    updateBlacklistStatus();
                     checkReady();
                 },
                 error: function(error) {
@@ -203,13 +269,178 @@
             });
         });
 
-        function checkReady() {
-            const runButton = document.getElementById('run-btn');
+        clearBlacklistButton.addEventListener('click', () => {
+            aiArtistIds.clear();
 
-            if (accessToken && aiArtistIds.size > 0) {
+            try {
+                localStorage.removeItem(LOCAL_STORAGE_BLACKLIST_KEY);
+            } catch(e) {}
+
+            logger("🧹 Saved blacklist cleared.");
+            updateBlacklistStatus();
+            checkReady();
+        });
+
+        loadPlaylistsButton.addEventListener('click', loadUserPlaylists);
+
+        playlistSelect.addEventListener('change', async () => {
+            selectedPlaylistReadable = false;
+            checkReady();
+
+            const playlistId = playlistSelect.value;
+            const playlistName = getSelectedPlaylistName();
+
+            if (!playlistId) {
+                setStatus(playlistAccessStatus, "Pick a playlist to check whether Spotify will let this app read it.", "neutral");
+                return;
+            }
+
+            await testPlaylistAccess(playlistId, playlistName);
+            checkReady();
+        });
+
+        function updateSourcePanels() {
+            const sourceType = document.getElementById('source-type').value;
+            const myPlaylistsPanel = document.getElementById('my-playlists-panel');
+            const manualPlaylistPanel = document.getElementById('manual-playlist-panel');
+
+            if (sourceType === "my-playlist") {
+                myPlaylistsPanel.classList.remove("hidden");
+                manualPlaylistPanel.classList.add("hidden");
+            } else if (sourceType === "manual-playlist") {
+                myPlaylistsPanel.classList.add("hidden");
+                manualPlaylistPanel.classList.remove("hidden");
+            } else {
+                myPlaylistsPanel.classList.add("hidden");
+                manualPlaylistPanel.classList.add("hidden");
+            }
+        }
+
+        function checkReady() {
+            const sourceType = document.getElementById('source-type').value;
+            const targetYear = getTargetYear();
+
+            let sourceReady = true;
+
+            if (sourceType === "my-playlist") {
+                sourceReady = Boolean(playlistSelect.value && selectedPlaylistReadable);
+            } else if (sourceType === "manual-playlist") {
+                sourceReady = Boolean(document.getElementById('playlist-url').value.trim());
+            }
+
+            if (accessToken && aiArtistIds.size > 0 && targetYear && sourceReady) {
                 runButton.removeAttribute('disabled');
             } else {
                 runButton.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        function getTargetYear() {
+            const rawYear = document.getElementById('target-year').value.trim();
+            const numericYear = Number(rawYear);
+
+            if (!rawYear || Number.isNaN(numericYear) || numericYear < 1900 || numericYear > 2100) {
+                return null;
+            }
+
+            return String(Math.floor(numericYear));
+        }
+
+        function extractArtistIdFromValue(value) {
+            if (!value) return null;
+
+            const cleaned = String(value).trim();
+
+            if (!cleaned) return null;
+
+            if (cleaned.startsWith("spotify:artist:")) {
+                return cleaned.split(":").pop();
+            }
+
+            if (cleaned.includes("/artist/")) {
+                try {
+                    return cleaned.split("/artist/")[1].split(/[?&#/]/)[0].trim();
+                } catch(e) {
+                    return null;
+                }
+            }
+
+            if (/^[A-Za-z0-9]{22}$/.test(cleaned)) {
+                return cleaned;
+            }
+
+            return null;
+        }
+
+        function parseBlacklistRows(rows) {
+            const ids = new Set();
+
+            const preferredKeys = [
+                "id",
+                "artist_id",
+                "artistid",
+                "spotify_artist_id",
+                "spotifyartistid",
+                "artist_uri",
+                "artisturl",
+                "artist_url",
+                "spotify_artist_url",
+                "url"
+            ];
+
+            rows.forEach(row => {
+                const normalizedRow = {};
+
+                Object.keys(row || {}).forEach(key => {
+                    normalizedRow[key.toLowerCase().replace(/\s+/g, "").replace(/-/g, "_")] = row[key];
+                });
+
+                preferredKeys.forEach(key => {
+                    const id = extractArtistIdFromValue(normalizedRow[key]);
+                    if (id) ids.add(id);
+                });
+            });
+
+            return Array.from(ids);
+        }
+
+        function saveBlacklistToLocalStorage() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_BLACKLIST_KEY, JSON.stringify(Array.from(aiArtistIds)));
+            } catch(e) {
+                logger("⚠️ Could not save blacklist locally. You may need to reload the CSV next time.");
+            }
+        }
+
+        function loadStoredBlacklist() {
+            try {
+                const raw = localStorage.getItem(LOCAL_STORAGE_BLACKLIST_KEY);
+
+                if (!raw) {
+                    updateBlacklistStatus();
+                    return;
+                }
+
+                const ids = JSON.parse(raw);
+
+                if (Array.isArray(ids)) {
+                    aiArtistIds = new Set(ids.filter(Boolean));
+                    logger(`💾 Loaded saved blacklist from this browser: ${aiArtistIds.size} AI profiles.`);
+                }
+            } catch(e) {
+                logger("⚠️ Could not read saved blacklist.");
+            }
+
+            updateBlacklistStatus();
+        }
+
+        function updateBlacklistStatus() {
+            if (aiArtistIds.size > 0) {
+                setStatus(blacklistStatus, `${aiArtistIds.size} AI artist IDs loaded. Saved in this browser.`, "good");
+                clearBlacklistButton.classList.remove("hidden");
+            } else {
+                setStatus(blacklistStatus, "No blacklist loaded yet.", "neutral");
+                clearBlacklistButton.classList.add("hidden");
             }
         }
 
@@ -232,6 +463,148 @@
             return null;
         }
 
+        async function loadUserPlaylists() {
+            if (!accessToken) {
+                logger("❌ Log in before loading playlists.");
+                return;
+            }
+
+            loadPlaylistsButton.setAttribute('disabled', 'disabled');
+            loadPlaylistsButton.innerText = "Loading playlists...";
+
+            playlistSelect.innerHTML = '<option value="">Loading playlists...</option>';
+            playlistSelect.setAttribute('disabled', 'disabled');
+            selectedPlaylistReadable = false;
+            checkReady();
+
+            let offset = 0;
+            const limit = 50;
+            let keepFetching = true;
+            const playlists = [];
+
+            try {
+                logger("📚 Loading your Spotify playlists...");
+
+                while (keepFetching) {
+                    const res = await fetch(URL_API + `/me/playlists?limit=${limit}&offset=${offset}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        logger(`❌ Playlist List Error: ${data.error?.message || 'Unknown server rejection'}`);
+                        playlistSelect.innerHTML = '<option value="">Could not load playlists</option>';
+                        return;
+                    }
+
+                    const items = data.items || [];
+
+                    items.forEach(playlist => {
+                        if (playlist && playlist.id && playlist.name) {
+                            playlists.push(playlist);
+                        }
+                    });
+
+                    offset += items.length;
+
+                    if (items.length < limit) {
+                        keepFetching = false;
+                    }
+                }
+
+                userPlaylists = playlists;
+                renderPlaylistDropdown(playlists);
+
+                logger(`✅ Loaded ${playlists.length} playlists. Pick one to run an access check.`);
+            } catch(err) {
+                logger(`❌ Playlist Loader Failure: ${err.message}`);
+                playlistSelect.innerHTML = '<option value="">Could not load playlists</option>';
+            } finally {
+                loadPlaylistsButton.removeAttribute('disabled');
+                loadPlaylistsButton.innerText = "Load / Refresh My Playlists";
+            }
+        }
+
+        function renderPlaylistDropdown(playlists) {
+            playlistSelect.innerHTML = "";
+
+            if (!playlists.length) {
+                playlistSelect.innerHTML = '<option value="">No playlists found</option>';
+                playlistSelect.setAttribute('disabled', 'disabled');
+                setStatus(playlistAccessStatus, "No playlists found in your Spotify account.", "warn");
+                return;
+            }
+
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.innerText = "Select a playlist...";
+            playlistSelect.appendChild(placeholder);
+
+            playlists.forEach(playlist => {
+                const option = document.createElement("option");
+                const ownerName = playlist.owner?.display_name || playlist.owner?.id || "Unknown owner";
+                const totalTracks = playlist.tracks?.total ?? "?";
+
+                option.value = playlist.id;
+                option.dataset.name = playlist.name;
+                option.innerText = `${playlist.name} — ${ownerName} (${totalTracks} tracks)`;
+
+                playlistSelect.appendChild(option);
+            });
+
+            playlistSelect.removeAttribute('disabled');
+            setStatus(playlistAccessStatus, "Pick a playlist to check whether Spotify will let this app read it.", "neutral");
+        }
+
+        function getSelectedPlaylistName() {
+            const selectedOption = playlistSelect.options[playlistSelect.selectedIndex];
+
+            if (!selectedOption) return "Playlist Scan";
+
+            return selectedOption.dataset.name || selectedOption.text || "Playlist Scan";
+        }
+
+        async function testPlaylistAccess(playlistId, playlistName) {
+            setStatus(playlistAccessStatus, `Checking access for "${playlistName}"...`, "neutral");
+            logger(`🔐 Checking playlist access: "${playlistName}"`);
+
+            try {
+                const res = await fetch(URL_API + `/playlists/${playlistId}/items?limit=1&offset=0&additional_types=track`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    selectedPlaylistReadable = true;
+                    setStatus(playlistAccessStatus, `✅ Readable: "${playlistName}" is ready to scan.`, "good");
+                    logger(`✅ Playlist readable: "${playlistName}"`);
+                    return true;
+                }
+
+                selectedPlaylistReadable = false;
+
+                if (res.status === 403) {
+                    setStatus(playlistAccessStatus, `⚠️ Metadata only: copy "${playlistName}" into your own Spotify account first, then refresh this list.`, "warn");
+                    logger(`⚠️ Playlist blocked by Spotify item access rules: "${playlistName}"`);
+                } else if (res.status === 404) {
+                    setStatus(playlistAccessStatus, `❌ Playlist not found: "${playlistName}".`, "bad");
+                    logger(`❌ Playlist not found: "${playlistName}"`);
+                } else {
+                    setStatus(playlistAccessStatus, `❌ Could not read playlist: ${data.error?.message || 'Unknown error'}`, "bad");
+                    logger(`❌ Access check failed: ${data.error?.message || 'Unknown error'}`);
+                }
+
+                return false;
+            } catch(err) {
+                selectedPlaylistReadable = false;
+                setStatus(playlistAccessStatus, `❌ Access check failed: ${err.message}`, "bad");
+                logger(`❌ Access Check Failure: ${err.message}`);
+                return false;
+            }
+        }
+
         function escapeRegex(text) {
             return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
@@ -245,18 +618,23 @@
             });
         }
 
-        function getBasePlaylistName(sourceType) {
-            const dateLabel = getDateLabel();
-
-            const sourceLabel = sourceType === 'liked'
-                ? 'Liked Songs'
-                : 'Playlist Scan';
-
-            return `Human Music Discoverer · ${sourceLabel} · 2026 · ${dateLabel}`;
+        function normalizePlaylistNameSegment(value) {
+            return String(value || "Playlist Scan")
+                .replace(/[\r\n\t]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 60) || "Playlist Scan";
         }
 
-        async function generatePlaylistNameWithVolume(sourceType) {
-            const baseName = getBasePlaylistName(sourceType);
+        function getBasePlaylistName(sourceName, targetYear) {
+            const dateLabel = getDateLabel();
+            const cleanSourceName = normalizePlaylistNameSegment(sourceName);
+
+            return `Human Music Discoverer · ${cleanSourceName} · ${targetYear} · ${dateLabel}`;
+        }
+
+        async function generatePlaylistNameWithVolume(sourceName, targetYear) {
+            const baseName = getBasePlaylistName(sourceName, targetYear);
             const matchingVolumes = [];
             let offset = 0;
             const limit = 50;
@@ -311,33 +689,65 @@
         function getScanStatsTemplate() {
             return {
                 scanned: 0,
-                found2026: 0,
+                targetYearFound: 0,
                 excludedAi: 0,
                 skippedLocal: 0,
                 skippedNonTrack: 0,
                 duplicateSkipped: 0,
+                uploadableSkipped: 0,
                 added: 0
             };
         }
 
-        document.getElementById('run-btn').addEventListener('click', async () => {
-            const runButton = document.getElementById('run-btn');
+        function getSourceDetails() {
             const sourceType = document.getElementById('source-type').value;
-            let playlistId = null;
 
-            if (sourceType === 'playlist') {
-                playlistId = extractPlaylistId(document.getElementById('playlist-url').value);
-
-                if (!playlistId) {
-                    logger("❌ Error: Invalid Spotify Playlist Link formatting.");
-                    return;
-                }
+            if (sourceType === "liked") {
+                return {
+                    type: "liked",
+                    playlistId: null,
+                    sourceName: "Liked Songs"
+                };
             }
+
+            if (sourceType === "my-playlist") {
+                return {
+                    type: "playlist",
+                    playlistId: playlistSelect.value,
+                    sourceName: getSelectedPlaylistName()
+                };
+            }
+
+            const manualPlaylistId = extractPlaylistId(document.getElementById('playlist-url').value);
+
+            return {
+                type: "playlist",
+                playlistId: manualPlaylistId,
+                sourceName: "Manual Playlist Scan"
+            };
+        }
+
+        runButton.addEventListener('click', async () => {
+            const targetYear = getTargetYear();
+
+            if (!targetYear) {
+                logger("❌ Error: Please enter a valid target year.");
+                return;
+            }
+
+            const sourceDetails = getSourceDetails();
+
+            if (sourceDetails.type === "playlist" && !sourceDetails.playlistId) {
+                logger("❌ Error: Please select or paste a valid Spotify playlist.");
+                return;
+            }
+
+            const visibility = document.getElementById('playlist-visibility').value;
 
             runButton.setAttribute('disabled', 'disabled');
             runButton.innerText = "Scanning...";
 
-            logger("🚀 Initializing deep track filtering analysis engine...");
+            logger(`🚀 Initializing deep track filtering analysis engine for ${targetYear}...`);
 
             const cleanTrackUris = [];
             const cleanTrackUriSet = new Set();
@@ -350,9 +760,9 @@
 
             try {
                 while (keepScanning) {
-                    const fetchUrl = sourceType === 'liked'
+                    const fetchUrl = sourceDetails.type === "liked"
                         ? URL_API + `/me/tracks?limit=${limit}&offset=${offset}`
-                        : URL_API + `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&additional_types=track`;
+                        : URL_API + `/playlists/${sourceDetails.playlistId}/items?limit=${limit}&offset=${offset}&additional_types=track`;
 
                     const targetRes = await fetch(fetchUrl, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -362,7 +772,7 @@
 
                     if (!targetRes.ok) { 
                         if (targetRes.status === 403) {
-                            logger("❌ Playlist Access Blocked: Try copying this playlist into your own Spotify library first, then paste the copied playlist link.");
+                            logger("❌ Playlist Access Blocked: Try copying this playlist into your own Spotify library first, then refresh your playlist list.");
                         } else if (targetRes.status === 404) {
                             logger("❌ Playlist Not Found: Check the playlist link, or copy the playlist into your Spotify account and try again.");
                         } else {
@@ -386,7 +796,7 @@
 
                         if (diagnosticCount < 1) {
                             const rawDataSnippet = JSON.stringify(item);
-                            logger(`📋 Raw Data Dump (v1.2.4): ${rawDataSnippet.substring(0, 300)}...`);
+                            logger(`📋 Raw Data Dump (v1.2.5): ${rawDataSnippet.substring(0, 300)}...`);
                             diagnosticCount++;
                         }
 
@@ -397,7 +807,7 @@
                             continue;
                         }
 
-                        if (track.type && track.type !== 'track') {
+                        if (track.type && track.type !== "track") {
                             stats.skippedNonTrack++;
                             logger(`⚠️ Skipped non-track item: "${track.name || 'Unknown item'}"`);
                             continue;
@@ -411,11 +821,11 @@
 
                         const releaseDate = track.album?.release_date || "";
 
-                        if (!releaseDate.startsWith('2026')) {
+                        if (!releaseDate.startsWith(targetYear)) {
                             continue;
                         }
 
-                        stats.found2026++;
+                        stats.targetYearFound++;
 
                         let isAi = false;
 
@@ -435,7 +845,8 @@
                             continue;
                         }
 
-                        if (!track.uri || !track.uri.startsWith('spotify:track:')) {
+                        if (!track.uri || !track.uri.startsWith("spotify:track:")) {
+                            stats.uploadableSkipped++;
                             logger(`⚠️ Skipped Unuploadable Track Format: "${track.name || 'Unknown track'}"`);
                             continue;
                         }
@@ -446,7 +857,7 @@
                             continue;
                         }
 
-                        logger(`✨ Approved Organic 2026 Cut: "${track.name}" by ${artists.join(', ')}`);
+                        logger(`✨ Approved Organic ${targetYear} Cut: "${track.name}" by ${artists.join(', ')}`);
 
                         cleanTrackUris.push(track.uri);
                         cleanTrackUriSet.add(track.uri);
@@ -462,32 +873,35 @@
                 stats.added = cleanTrackUris.length;
 
                 logger("📊 Scan Summary:");
+                logger(`Source: ${sourceDetails.sourceName}`);
+                logger(`Target year: ${targetYear}`);
                 logger(`Tracks scanned: ${stats.scanned}`);
-                logger(`2026 tracks found: ${stats.found2026}`);
+                logger(`${targetYear} tracks found: ${stats.targetYearFound}`);
                 logger(`AI tracks excluded: ${stats.excludedAi}`);
                 logger(`Duplicates skipped: ${stats.duplicateSkipped}`);
                 logger(`Local files skipped: ${stats.skippedLocal}`);
+                logger(`Unuploadable tracks skipped: ${stats.uploadableSkipped}`);
                 logger(`Final tracks to add: ${stats.added}`);
 
                 if (cleanTrackUris.length === 0) {
-                    logger("ℹ️ Complete! No organic 2026 tracks found inside this pool.");
+                    logger(`ℹ️ Complete! No organic ${targetYear} tracks found inside this pool.`);
                     return;
                 }
 
                 logger("Constructing destination playlist container...");
 
-                const playlistName = await generatePlaylistNameWithVolume(sourceType);
+                const playlistName = await generatePlaylistNameWithVolume(sourceDetails.sourceName, targetYear);
 
                 const playlistRes = await fetch(URL_API + "/me/playlists", {
-                    method: 'POST',
+                    method: "POST",
                     headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
                         name: playlistName,
-                        description: `AI-cleaned playlist containing organic 2026 releases only. ${cleanTrackUris.length} tracks added.`,
-                        public: true
+                        description: `AI-cleaned playlist containing organic ${targetYear} releases only. Source: ${sourceDetails.sourceName}. ${cleanTrackUris.length} tracks added.`,
+                        public: visibility === "public"
                     })
                 });
 
@@ -507,10 +921,10 @@
                     const chunk = cleanTrackUris.slice(i, i + 100);
 
                     const addRes = await fetch(tracksUrl, {
-                        method: 'POST',
+                        method: "POST",
                         headers: {
-                            'Authorization': `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json'
+                            "Authorization": `Bearer ${accessToken}`,
+                            "Content-Type": "application/json"
                         },
                         body: JSON.stringify({ uris: chunk })
                     });
@@ -533,13 +947,14 @@
                 logger(`❌ Pipeline Failure: ${err.message}`);
             } finally {
                 runButton.removeAttribute('disabled');
-                runButton.innerText = "4. Deep-Scan & Build 2026 Playlist";
+                runButton.innerText = "6. Deep-Scan & Build Playlist";
+                checkReady();
             }
         });
 
         function generateRandomString(length) { 
-            let result = ''; 
-            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; 
+            let result = ""; 
+            const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; 
 
             for (let i = 0; i < length; i++) {
                 result += characters.charAt(Math.floor(Math.random() * characters.length));
@@ -549,22 +964,25 @@
         }
 
         async function sha256(plain) {
-            return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
+            return window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(plain));
         }
 
         function base64urlencode(buffer) { 
             const bytes = new Uint8Array(buffer); 
-            let binary = ''; 
+            let binary = ""; 
 
             for (let i = 0; i < bytes.byteLength; i++) {
                 binary += String.fromCharCode(bytes[i]);
             } 
 
             return btoa(binary)
-                .replace(/\+/g, '-')
-                .replace(/\//g, '_')
-                .replace(/=+$/, '');
+                .replace(/\+/g, "-")
+                .replace(/\//g, "_")
+                .replace(/=+$/, "");
         }
+
+        updateSourcePanels();
+        checkReady();
     </script>
 </body>
 </html>
