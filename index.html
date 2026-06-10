@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.2.0)</title>
+    <title>Organic Spotify Playlist Builder (v1.2.1)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center p-6">
 
     <div class="max-w-md w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
-        <!-- VERSION UPDATE: Visibly stamped version layout -->
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.0</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.1</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -60,8 +59,7 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        // VERSION UPDATE: Added clear verification hook to structural logging boot sequence
-        logger("⚙️ System Booted: Running Live Production Version v1.2.0");
+        logger("⚙️ System Booted: Running Live Production Version v1.2.1");
 
         document.getElementById('source-type').addEventListener('change', (e) => {
             const urlInput = document.getElementById('playlist-url');
@@ -193,14 +191,15 @@
                     logger(`Deep scanning index offset ${offset} (${items.length} tracks loaded)...`);
 
                     for (let item of items) {
-                        const track = item.track; if (!track) continue;
-
-                        // 🔍 DIAGNOSTIC LAYER: Captures first 5 database readouts
+                        // 🔍 FIXED DIAGNOSTIC LAYER: Placed at the absolute top of the loop to read the raw data strings
                         if (diagnosticCount < 5) {
-                            logger(`📋 Inspector: "${track.name}" — Database Date raw value is: [${track.album?.release_date || 'NOT FOUND'}]`);
+                            let trackName = item?.track?.name || "UNKNOWN TRACK OBJ";
+                            let releaseDate = item?.track?.album?.release_date || "NO DATE FIELD IN METADATA";
+                            logger(`📋 Inspector (v1.2.1): "${trackName}" — Date: [${releaseDate}]`);
                             diagnosticCount++;
                         }
 
+                        const track = item.track; if (!track) continue;
                         if (!(track.album && track.album.release_date || "").startsWith('2026')) continue;
 
                         let isAi = false;
