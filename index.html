@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.2.1)</title>
+    <title>Organic Spotify Playlist Builder (v1.2.2)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-md w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.1</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.2</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -59,7 +59,7 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.2.1");
+        logger("⚙️ System Booted: Running Live Production Version v1.2.2");
 
         document.getElementById('source-type').addEventListener('change', (e) => {
             const urlInput = document.getElementById('playlist-url');
@@ -191,11 +191,10 @@
                     logger(`Deep scanning index offset ${offset} (${items.length} tracks loaded)...`);
 
                     for (let item of items) {
-                        // 🔍 FIXED DIAGNOSTIC LAYER: Placed at the absolute top of the loop to read the raw data strings
-                        if (diagnosticCount < 5) {
-                            let trackName = item?.track?.name || "UNKNOWN TRACK OBJ";
-                            let releaseDate = item?.track?.album?.release_date || "NO DATE FIELD IN METADATA";
-                            logger(`📋 Inspector (v1.2.1): "${trackName}" — Date: [${releaseDate}]`);
+                        // 🔍 CRITICAL DIAGNOSTIC UPGRADE: Prints the true shape of the data object straight to your log window
+                        if (diagnosticCount < 1) {
+                            let rawDataSnippet = JSON.stringify(item);
+                            logger(`📋 Raw Data Dump (v1.2.2): ${rawDataSnippet.substring(0, 300)}...`);
                             diagnosticCount++;
                         }
 
