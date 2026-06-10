@@ -39,7 +39,6 @@
 
     <script>
         const CLIENT_ID = 'd368b495e8534e89bcb228980513922e'; 
-        // TARGET SET: Locked to your true GitHub Pages endpoint
         const REDIRECT_URI = 'https://buttahs.github.io/playlist-builder/'; 
         
         const n1 = "spot";
@@ -197,8 +196,13 @@
                         if (isAi) {
                             logger(`🛑 Excluded AI: "${track.name}"`);
                         } else {
-                            logger(`✨ Approved Organic 2026 Cut: "${track.name}" by ${artists.join(', ')}`);
-                            cleanTrackUris.push(track.uri);
+                            // FIXED: Added a strict tracking structural check to strip out local desktop files or unplayable items
+                            if (track.uri && track.uri.startsWith('spotify:track:')) {
+                                logger(`✨ Approved Organic 2026 Cut: "${track.name}" by ${artists.join(', ')}`);
+                                cleanTrackUris.push(track.uri);
+                            } else {
+                                logger(`⚠️ Skipped Unuploadable/Local Track Format: "${track.name}"`);
+                            }
                         }
                     }
 
@@ -227,7 +231,13 @@
                         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ uris: chunk })
                     });
-                    if (!addRes.ok) { logger("❌ Track Addition Blocked."); return; }
+                    
+                    // FIXED: Replaced generic block text with an error decoder to unpack Spotify's real server explanation
+                    if (!addRes.ok) { 
+                        const errorData = await addRes.json().catch(() => ({}));
+                        logger(`❌ Track Addition Blocked: ${errorData.error?.message || 'Unknown API Reject'}`); 
+                        return; 
+                    }
                 }
 
                 const targetLink = playlistData.external_urls.spotify;
