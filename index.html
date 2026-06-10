@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.2.2)</title>
+    <title>Organic Spotify Playlist Builder (v1.2.3)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-md w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.2</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.3</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -27,10 +27,11 @@
         <div class="mb-6">
             <label class="block text-sm font-medium mb-2 text-gray-400">3. Select Target Music Pool</label>
             <select id="source-type" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 mb-3 cursor-pointer">
-                <option value="playlist">Scan Public USER Playlist Link</option>
+                <option value="playlist">Scan My Playlist / Copied Playlist Link</option>
                 <option value="liked">My Entire Liked Songs Library</option>
             </select>
-            <input type="text" id="playlist-url" placeholder="Paste user-curated Playlist Link here..." class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
+            <input type="text" id="playlist-url" placeholder="Paste a playlist you own, follow, or copied into your library..." class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
+            <p class="mt-2 text-xs text-gray-500">Tip: if a public playlist fails, copy it into your Spotify account first, then paste your copied playlist link.</p>
         </div>
 
         <button id="run-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition cursor-pointer">
@@ -54,12 +55,22 @@
         let aiArtistIds = new Set();
         const logDiv = document.getElementById('status-log');
 
-        function logger(text) {
-            logDiv.innerHTML += `> ${text}<br>`;
+        function logger(text, allowHtml = false) {
+            const safeText = allowHtml ? text : escapeHtml(text);
+            logDiv.innerHTML += `> ${safeText}<br>`;
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.2.2");
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        logger("⚙️ System Booted: Running Live Production Version v1.2.3");
 
         document.getElementById('source-type').addEventListener('change', (e) => {
             const urlInput = document.getElementById('playlist-url');
@@ -144,11 +155,18 @@
             });
         });
 
-        function checkReady() { if (accessToken && aiArtistIds.size > 0) document.getElementById('run-btn').removeAttribute('disabled'); }
+        function checkReady() { 
+            if (accessToken && aiArtistIds.size > 0) document.getElementById('run-btn').removeAttribute('disabled'); 
+        }
         
         function extractPlaylistId(urlOrId) {
-            if (!urlOrId.includes(n1 + n2 + "." + d)) return urlOrId.trim();
-            try { const parts = urlOrId.split('/playlist/'); if (parts.length > 1) return parts[1].split('?')[0].trim(); } catch (e) {}
+            if (!urlOrId) return null;
+            const trimmed = urlOrId.trim();
+            if (!trimmed.includes(n1 + n2 + "." + d)) return trimmed;
+            try { 
+                const parts = trimmed.split('/playlist/'); 
+                if (parts.length > 1) return parts[1].split('?')[0].trim(); 
+            } catch (e) {}
             return null;
         }
 
@@ -165,44 +183,69 @@
             let cleanTrackUris = [];
             let offset = 0;
             let keepScanning = true;
-            let limit = sourceType === 'liked' ? 50 : 100;
+            let limit = 50;
             let diagnosticCount = 0; 
 
             try {
                 while (keepScanning) {
                     let fetchUrl = sourceType === 'liked' 
                         ? URL_API + `/me/tracks?limit=${limit}&offset=${offset}`
-                        : URL_API + `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`;
+                        : URL_API + `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}&additional_types=track`;
 
                     const targetRes = await fetch(fetchUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
-                    const targetData = await targetRes.json();
+                    const targetData = await targetRes.json().catch(() => ({}));
                     
                     if (!targetRes.ok) { 
-                        if(targetRes.status === 404 && playlistId && playlistId.startsWith('37i9dQZF')) {
-                            logger("❌ Data Pull Error: Resource not found. (Spotify blocks API calls from official editorial playlists starting with 37i9dQZF. Target user playlists instead).");
+                        if (targetRes.status === 403) {
+                            logger("❌ Playlist Access Blocked: Try copying this playlist into your own Spotify library first, then paste the copied playlist link.");
+                        } else if (targetRes.status === 404) {
+                            logger("❌ Playlist Not Found: Check the playlist link, or copy the playlist into your Spotify account and try again.");
                         } else {
                             logger(`❌ Data Pull Error: ${targetData.error?.message || 'Unknown server rejection'}`); 
                         }
                         return; 
                     }
+
                     const items = targetData.items || [];
                     if (items.length === 0) { keepScanning = false; break; }
 
                     logger(`Deep scanning index offset ${offset} (${items.length} tracks loaded)...`);
 
                     for (let item of items) {
-                        // 🔍 CRITICAL DIAGNOSTIC UPGRADE: Prints the true shape of the data object straight to your log window
+                        // Prints the true shape of the data object straight to your log window.
                         if (diagnosticCount < 1) {
                             let rawDataSnippet = JSON.stringify(item);
-                            logger(`📋 Raw Data Dump (v1.2.2): ${rawDataSnippet.substring(0, 300)}...`);
+                            logger(`📋 Raw Data Dump (v1.2.3): ${rawDataSnippet.substring(0, 300)}...`);
                             diagnosticCount++;
                         }
 
-                        const track = item.track; if (!track) continue;
-                        if (!(track.album && track.album.release_date || "").startsWith('2026')) continue;
+                        const track = item.track || item.item;
+
+                        if (!track) {
+                            logger("⚠️ Skipped empty playlist item.");
+                            continue;
+                        }
+
+                        if (track.type && track.type !== 'track') {
+                            logger(`⚠️ Skipped non-track item: ${track.name || 'Unknown item'}`);
+                            continue;
+                        }
+
+                        if (item.is_local || track.is_local) {
+                            logger(`⚠️ Skipped local file: "${track.name || 'Unknown local track'}"`);
+                            continue;
+                        }
+
+                        const releaseDate = track.album?.release_date || "";
+                        if (!releaseDate.startsWith('2026')) continue;
 
                         let isAi = false;
-                        let artists = track.artists.map(a => { if (aiArtistIds.has(a.id)) isAi = true; return a.name; });
+                        let artists = Array.isArray(track.artists)
+                            ? track.artists.map(a => { 
+                                if (a.id && aiArtistIds.has(a.id)) isAi = true; 
+                                return a.name; 
+                            })
+                            : [];
                         
                         if (isAi) {
                             logger(`🛑 Excluded AI: "${track.name}"`);
@@ -211,7 +254,7 @@
                                 logger(`✨ Approved Organic 2026 Cut: "${track.name}" by ${artists.join(', ')}`);
                                 cleanTrackUris.push(track.uri);
                             } else {
-                                logger(`⚠️ Skipped Unuploadable/Local Track Format: "${track.name}"`);
+                                logger(`⚠️ Skipped Unuploadable/Local Track Format: "${track.name || 'Unknown track'}"`);
                             }
                         }
                     }
@@ -228,8 +271,8 @@
                     headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: "Organic 2026 Extracted Cuts", description: 'AI-Cleaned output.', public: true })
                 });
-                const playlistData = await playlistRes.json();
-                if (!playlistRes.ok) { logger(`❌ Playlist Creation Blocked: ${playlistData.error.message}`); return; }
+                const playlistData = await playlistRes.json().catch(() => ({}));
+                if (!playlistRes.ok) { logger(`❌ Playlist Creation Blocked: ${playlistData.error?.message || 'Unknown API Reject'}`); return; }
 
                 logger(`Injecting ${cleanTrackUris.length} tracks into your account layout...`);
                 const tracksUrl = URL_API + `/playlists/${playlistData.id}/items`;
@@ -250,7 +293,7 @@
                 }
 
                 const targetLink = playlistData.external_urls.spotify;
-                logger(`🎉 Success! Playlist built. Click to open: <a href="${targetLink}" target="_blank" style="color: #34d399; text-decoration: underline; font-weight: bold;">Open Live Playlist</a>`);
+                logger(`🎉 Success! Playlist built. Click to open: <a href="${targetLink}" target="_blank" rel="noopener noreferrer" style="color: #34d399; text-decoration: underline; font-weight: bold;">Open Live Playlist</a>`, true);
             } catch (err) { logger(`❌ Pipeline Failure: ${err.message}`); }
         });
 
