@@ -163,10 +163,10 @@
             let offset = 0;
             let keepScanning = true;
             let limit = sourceType === 'liked' ? 50 : 100;
+            let diagnosticCount = 0; // Tracks diagnostic sample limit
 
             try {
                 while (keepScanning) {
-                    // COMPLIANCE FIX: Changed playlist target tracks endpoint to /items to match standard specifications
                     let fetchUrl = sourceType === 'liked' 
                         ? URL_API + `/me/tracks?limit=${limit}&offset=${offset}`
                         : URL_API + `/playlists/${playlistId}/items?limit=${limit}&offset=${offset}`;
@@ -189,7 +189,14 @@
 
                     for (let item of items) {
                         const track = item.track; if (!track) continue;
-                        if (!(track.album.release_date || "").startsWith('2026')) continue;
+
+                        // 🔍 DIAGNOSTIC LAYER: Prints the raw timestamp Spotify returns for the first 5 tracks
+                        if (diagnosticCount < 5) {
+                            logger(`📋 Inspector: "${track.name}" — Database Date raw value is: [${track.album?.release_date || 'NOT FOUND'}]`);
+                            diagnosticCount++;
+                        }
+
+                        if (!(track.album && track.album.release_date || "").startsWith('2026')) continue;
 
                         let isAi = false;
                         let artists = track.artists.map(a => { if (aiArtistIds.has(a.id)) isAi = true; return a.name; });
@@ -222,8 +229,6 @@
                 if (!playlistRes.ok) { logger(`❌ Playlist Creation Blocked: ${playlistData.error.message}`); return; }
 
                 logger(`Injecting ${cleanTrackUris.length} tracks into your account layout...`);
-                
-                // COMPLIANCE FIX: Redirected layout batch addition endpoint to /items instead of the deprecated /tracks URL
                 const tracksUrl = URL_API + `/playlists/${playlistData.id}/items`;
                 
                 for (let i = 0; i < cleanTrackUris.length; i += 100) {
