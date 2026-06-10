@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.2.5)</title>
+    <title>Organic Spotify Playlist Builder (v1.2.7)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-lg w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.5</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.2.7</span>
         </div>
 
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -20,24 +20,42 @@
         </button>
 
         <div class="mb-6">
-            <label class="block text-sm font-medium mb-2 text-gray-400">2. Load AI Blacklist CSV</label>
+            <label class="block text-sm font-medium mb-2 text-gray-400">2. Load / Override AI Blacklist CSV</label>
             <input type="file" id="csv-file" accept=".csv" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 cursor-pointer">
-            <div class="flex items-center justify-between mt-2">
+            <p class="mt-2 text-xs text-gray-500 leading-relaxed">
+                Add a <span class="font-mono text-gray-300">blacklist.csv</span> file next to this index file in GitHub to auto-load it. Manual uploads override the default and are remembered in this browser.
+            </p>
+            <div class="mt-2">
                 <p id="blacklist-status" class="text-xs text-gray-500">No blacklist loaded yet.</p>
-                <button id="clear-blacklist-btn" type="button" class="hidden text-xs text-red-300 hover:text-red-200 underline">
-                    Clear saved blacklist
-                </button>
+                <div class="flex gap-3 mt-2">
+                    <button id="load-default-blacklist-btn" type="button" class="text-xs text-green-300 hover:text-green-200 underline">
+                        Load default blacklist
+                    </button>
+                    <button id="clear-blacklist-btn" type="button" class="hidden text-xs text-red-300 hover:text-red-200 underline">
+                        Clear saved blacklist
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
             <div>
                 <label class="block text-sm font-medium mb-2 text-gray-400">3. Target Year</label>
                 <input type="number" id="target-year" min="1900" max="2100" value="2026" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm">
             </div>
 
             <div>
-                <label class="block text-sm font-medium mb-2 text-gray-400">4. New Playlist Visibility</label>
+                <label class="block text-sm font-medium mb-2 text-gray-400">4. Min Duration</label>
+                <select id="min-duration-ms" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
+                    <option value="0">No minimum</option>
+                    <option value="120000">2:00+</option>
+                    <option value="150000">2:30+</option>
+                    <option value="179000">2:59+</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">5. Visibility</label>
                 <select id="playlist-visibility" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
                     <option value="public">Public</option>
                     <option value="private">Private</option>
@@ -46,7 +64,7 @@
         </div>
 
         <div class="mb-6">
-            <label class="block text-sm font-medium mb-2 text-gray-400">5. Select Target Music Pool</label>
+            <label class="block text-sm font-medium mb-2 text-gray-400">6. Select Target Music Pool</label>
 
             <select id="source-type" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 mb-3 cursor-pointer">
                 <option value="my-playlist">Choose From My Spotify Playlists</option>
@@ -74,10 +92,19 @@
                     Tip: if a Spotify playlist will not scan, copy it into your own Spotify account first, then paste that copied playlist link here.
                 </p>
             </div>
+
+            <div class="mt-3 bg-gray-900 border border-gray-700 rounded p-3">
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    Copying tracks from another playlist? In the Spotify desktop app, click the playlist track list, press
+                    <span class="font-mono text-gray-200">Ctrl + A</span> on Windows or
+                    <span class="font-mono text-gray-200">Cmd + A</span> on Mac, then right-click and choose
+                    <span class="text-gray-200">Add to playlist</span>.
+                </p>
+            </div>
         </div>
 
         <button id="run-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition cursor-pointer">
-            6. Deep-Scan & Build Playlist
+            7. Deep-Scan & Build Playlist
         </button>
 
         <div id="status-log" class="mt-6 text-xs text-gray-400 font-mono max-h-80 overflow-y-auto bg-black p-3 rounded border border-gray-800"></div>
@@ -93,12 +120,16 @@
         const URL_ACCOUNTS = "https://accounts." + n1 + n2 + "." + d;
         const URL_API = "https://api." + n1 + n2 + "." + d + "/v1";
 
+        const DEFAULT_BLACKLIST_URL = "blacklist.csv";
         const LOCAL_STORAGE_BLACKLIST_KEY = "hmd_ai_artist_ids_v1";
+        const LOCAL_STORAGE_BLACKLIST_META_KEY = "hmd_ai_artist_ids_meta_v1";
 
         let accessToken = null;
         let aiArtistIds = new Set();
         let userPlaylists = [];
         let selectedPlaylistReadable = false;
+        let blacklistSource = "none";
+        let blacklistLastUpdated = null;
 
         const logDiv = document.getElementById('status-log');
         const loginButton = document.getElementById('login-btn');
@@ -108,6 +139,7 @@
         const playlistAccessStatus = document.getElementById('playlist-access-status');
         const blacklistStatus = document.getElementById('blacklist-status');
         const clearBlacklistButton = document.getElementById('clear-blacklist-btn');
+        const loadDefaultBlacklistButton = document.getElementById('load-default-blacklist-btn');
 
         function escapeHtml(value) {
             return String(value)
@@ -144,8 +176,9 @@
             }
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.2.5");
+        logger("⚙️ System Booted: Running Live Production Version v1.2.7");
         loadStoredBlacklist();
+        attemptAutoLoadDefaultBlacklist();
 
         document.getElementById('source-type').addEventListener('change', () => {
             updateSourcePanels();
@@ -153,6 +186,7 @@
         });
 
         document.getElementById('target-year').addEventListener('input', checkReady);
+        document.getElementById('min-duration-ms').addEventListener('change', checkReady);
 
         loginButton.addEventListener('click', () => {
             logger("Processing parameter sequence...");
@@ -257,9 +291,11 @@
                     const parsedIds = parseBlacklistRows(results.data);
 
                     aiArtistIds = new Set(parsedIds);
+                    blacklistSource = `Uploaded CSV: ${file.name}`;
+                    blacklistLastUpdated = new Date().toISOString();
                     saveBlacklistToLocalStorage();
 
-                    logger(`Blacklist compiled into memory. Total AI profiles loaded: ${aiArtistIds.size}`);
+                    logger(`Blacklist compiled into memory from ${file.name}. Total AI profiles loaded: ${aiArtistIds.size}`);
                     updateBlacklistStatus();
                     checkReady();
                 },
@@ -272,13 +308,21 @@
         clearBlacklistButton.addEventListener('click', () => {
             aiArtistIds.clear();
 
+            blacklistSource = "none";
+            blacklistLastUpdated = null;
+
             try {
                 localStorage.removeItem(LOCAL_STORAGE_BLACKLIST_KEY);
+                localStorage.removeItem(LOCAL_STORAGE_BLACKLIST_META_KEY);
             } catch(e) {}
 
             logger("🧹 Saved blacklist cleared.");
             updateBlacklistStatus();
             checkReady();
+        });
+
+        loadDefaultBlacklistButton.addEventListener('click', () => {
+            loadDefaultBlacklist(true);
         });
 
         loadPlaylistsButton.addEventListener('click', loadUserPlaylists);
@@ -346,6 +390,50 @@
             return String(Math.floor(numericYear));
         }
 
+        function getMinimumDurationMs() {
+            const rawValue = document.getElementById('min-duration-ms').value;
+            const duration = Number(rawValue);
+
+            if (Number.isNaN(duration) || duration < 0) {
+                return 0;
+            }
+
+            return duration;
+        }
+
+        function formatDurationMs(ms) {
+            const safeMs = Number(ms) || 0;
+            const totalSeconds = Math.floor(safeMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            return `${minutes}:${String(seconds).padStart(2, "0")}`;
+        }
+
+        function getDurationFilterLabel(minDurationMs) {
+            return minDurationMs > 0
+                ? `${formatDurationMs(minDurationMs)}+`
+                : "No minimum";
+        }
+
+        function formatStoredDate(isoString) {
+            if (!isoString) return "Unknown";
+
+            const parsed = new Date(isoString);
+
+            if (Number.isNaN(parsed.getTime())) {
+                return "Unknown";
+            }
+
+            return parsed.toLocaleString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
         function extractArtistIdFromValue(value) {
             if (!value) return null;
 
@@ -407,6 +495,10 @@
         function saveBlacklistToLocalStorage() {
             try {
                 localStorage.setItem(LOCAL_STORAGE_BLACKLIST_KEY, JSON.stringify(Array.from(aiArtistIds)));
+                localStorage.setItem(LOCAL_STORAGE_BLACKLIST_META_KEY, JSON.stringify({
+                    source: blacklistSource,
+                    lastUpdated: blacklistLastUpdated
+                }));
             } catch(e) {
                 logger("⚠️ Could not save blacklist locally. You may need to reload the CSV next time.");
             }
@@ -415,6 +507,7 @@
         function loadStoredBlacklist() {
             try {
                 const raw = localStorage.getItem(LOCAL_STORAGE_BLACKLIST_KEY);
+                const rawMeta = localStorage.getItem(LOCAL_STORAGE_BLACKLIST_META_KEY);
 
                 if (!raw) {
                     updateBlacklistStatus();
@@ -427,6 +520,15 @@
                     aiArtistIds = new Set(ids.filter(Boolean));
                     logger(`💾 Loaded saved blacklist from this browser: ${aiArtistIds.size} AI profiles.`);
                 }
+
+                if (rawMeta) {
+                    const meta = JSON.parse(rawMeta);
+                    blacklistSource = meta.source || "Saved browser copy";
+                    blacklistLastUpdated = meta.lastUpdated || null;
+                } else {
+                    blacklistSource = "Saved browser copy";
+                    blacklistLastUpdated = null;
+                }
             } catch(e) {
                 logger("⚠️ Could not read saved blacklist.");
             }
@@ -434,9 +536,75 @@
             updateBlacklistStatus();
         }
 
+        async function attemptAutoLoadDefaultBlacklist() {
+            if (aiArtistIds.size > 0) {
+                return;
+            }
+
+            await loadDefaultBlacklist(false);
+        }
+
+        async function loadDefaultBlacklist(userRequested = false) {
+            try {
+                if (userRequested) {
+                    logger(`📥 Loading default blacklist from ${DEFAULT_BLACKLIST_URL}...`);
+                }
+
+                const response = await fetch(DEFAULT_BLACKLIST_URL, { cache: "no-store" });
+
+                if (!response.ok) {
+                    if (userRequested) {
+                        logger(`❌ Default blacklist not found at ${DEFAULT_BLACKLIST_URL}. Add blacklist.csv next to index.html in GitHub.`);
+                    } else {
+                        logger(`ℹ️ No default ${DEFAULT_BLACKLIST_URL} found. Upload a CSV manually to begin.`);
+                    }
+
+                    return;
+                }
+
+                const csvText = await response.text();
+                const parsed = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true
+                });
+
+                const parsedIds = parseBlacklistRows(parsed.data);
+
+                if (!parsedIds.length) {
+                    logger(`⚠️ Default blacklist loaded but no valid Spotify artist IDs were found.`);
+                    return;
+                }
+
+                aiArtistIds = new Set(parsedIds);
+                blacklistSource = `GitHub default: ${DEFAULT_BLACKLIST_URL}`;
+                blacklistLastUpdated = new Date().toISOString();
+
+                saveBlacklistToLocalStorage();
+                updateBlacklistStatus();
+                checkReady();
+
+                logger(`✅ Default blacklist loaded from ${DEFAULT_BLACKLIST_URL}. Total AI profiles loaded: ${aiArtistIds.size}`);
+            } catch(err) {
+                if (userRequested) {
+                    logger(`❌ Default Blacklist Load Failure: ${err.message}`);
+                } else {
+                    logger("ℹ️ Default blacklist could not be auto-loaded. Upload a CSV manually if needed.");
+                }
+            }
+        }
+
         function updateBlacklistStatus() {
             if (aiArtistIds.size > 0) {
-                setStatus(blacklistStatus, `${aiArtistIds.size} AI artist IDs loaded. Saved in this browser.`, "good");
+                const sourceLabel = blacklistSource && blacklistSource !== "none"
+                    ? blacklistSource
+                    : "Unknown source";
+
+                setStatus(
+                    blacklistStatus,
+                    `${aiArtistIds.size} AI artist IDs loaded · Source: ${sourceLabel} · Last updated: ${formatStoredDate(blacklistLastUpdated)}`,
+                    "good"
+                );
+
                 clearBlacklistButton.classList.remove("hidden");
             } else {
                 setStatus(blacklistStatus, "No blacklist loaded yet.", "neutral");
@@ -695,6 +863,7 @@
                 skippedNonTrack: 0,
                 duplicateSkipped: 0,
                 uploadableSkipped: 0,
+                shortDurationSkipped: 0,
                 added: 0
             };
         }
@@ -743,11 +912,13 @@
             }
 
             const visibility = document.getElementById('playlist-visibility').value;
+            const minDurationMs = getMinimumDurationMs();
 
             runButton.setAttribute('disabled', 'disabled');
             runButton.innerText = "Scanning...";
 
             logger(`🚀 Initializing deep track filtering analysis engine for ${targetYear}...`);
+            logger(`⏱️ Minimum duration filter: ${getDurationFilterLabel(minDurationMs)}`);
 
             const cleanTrackUris = [];
             const cleanTrackUriSet = new Set();
@@ -796,7 +967,7 @@
 
                         if (diagnosticCount < 1) {
                             const rawDataSnippet = JSON.stringify(item);
-                            logger(`📋 Raw Data Dump (v1.2.5): ${rawDataSnippet.substring(0, 300)}...`);
+                            logger(`📋 Raw Data Dump (v1.2.7): ${rawDataSnippet.substring(0, 300)}...`);
                             diagnosticCount++;
                         }
 
@@ -826,6 +997,12 @@
                         }
 
                         stats.targetYearFound++;
+
+                        if (minDurationMs > 0 && Number(track.duration_ms || 0) < minDurationMs) {
+                            stats.shortDurationSkipped++;
+                            logger(`⏱️ Skipped Short Track (<${formatDurationMs(minDurationMs)}): "${track.name}" (${formatDurationMs(track.duration_ms)})`);
+                            continue;
+                        }
 
                         let isAi = false;
 
@@ -875,8 +1052,10 @@
                 logger("📊 Scan Summary:");
                 logger(`Source: ${sourceDetails.sourceName}`);
                 logger(`Target year: ${targetYear}`);
+                logger(`Minimum duration: ${getDurationFilterLabel(minDurationMs)}`);
                 logger(`Tracks scanned: ${stats.scanned}`);
                 logger(`${targetYear} tracks found: ${stats.targetYearFound}`);
+                logger(`Short tracks skipped: ${stats.shortDurationSkipped}`);
                 logger(`AI tracks excluded: ${stats.excludedAi}`);
                 logger(`Duplicates skipped: ${stats.duplicateSkipped}`);
                 logger(`Local files skipped: ${stats.skippedLocal}`);
@@ -884,7 +1063,7 @@
                 logger(`Final tracks to add: ${stats.added}`);
 
                 if (cleanTrackUris.length === 0) {
-                    logger(`ℹ️ Complete! No organic ${targetYear} tracks found inside this pool.`);
+                    logger(`ℹ️ Complete! No organic ${targetYear} tracks found inside this pool after blacklist and duration filters.`);
                     return;
                 }
 
@@ -900,7 +1079,7 @@
                     },
                     body: JSON.stringify({
                         name: playlistName,
-                        description: `AI-cleaned playlist containing organic ${targetYear} releases only. Source: ${sourceDetails.sourceName}. ${cleanTrackUris.length} tracks added.`,
+                        description: `AI-cleaned playlist containing organic ${targetYear} releases only. Source: ${sourceDetails.sourceName}. Minimum duration: ${getDurationFilterLabel(minDurationMs)}. ${cleanTrackUris.length} tracks added.`,
                         public: visibility === "public"
                     })
                 });
@@ -947,7 +1126,7 @@
                 logger(`❌ Pipeline Failure: ${err.message}`);
             } finally {
                 runButton.removeAttribute('disabled');
-                runButton.innerText = "6. Deep-Scan & Build Playlist";
+                runButton.innerText = "7. Deep-Scan & Build Playlist";
                 checkReady();
             }
         });
