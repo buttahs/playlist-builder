@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.3.1)</title>
+    <title>Organic Spotify Playlist Builder (v1.4.0)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-2xl w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.3.1</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.4.0</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -149,6 +149,45 @@
             9. Deep-Scan & Build Playlist
         </button>
 
+        <div class="mt-8 pt-6 border-t border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-lg font-bold text-green-400">Liked Songs Artist Analysis</h2>
+                <span class="text-xs text-gray-500">No playlist changes</span>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed mb-4">
+                Find the artists appearing most often across your entire Liked Songs library.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Collaboration counting</label>
+                    <select id="artist-count-mode" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
+                        <option value="all" selected>Count every credited artist</option>
+                        <option value="primary">Count primary artist only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Results shown</label>
+                    <select id="artist-result-limit" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
+                        <option value="25">Top 25</option>
+                        <option value="50" selected>Top 50</option>
+                        <option value="100">Top 100</option>
+                        <option value="0">All artists</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="analyse-liked-btn" disabled type="button" class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition cursor-pointer">
+                Analyse My Liked Songs
+            </button>
+
+            <div id="artist-analysis-summary" class="hidden mt-4 bg-gray-900 border border-gray-700 rounded p-3 text-sm text-gray-300"></div>
+            <div id="artist-analysis-results" class="hidden mt-3 max-h-96 overflow-y-auto border border-gray-700 rounded"></div>
+            <button id="download-artist-csv-btn" type="button" class="hidden mt-3 text-xs text-green-300 hover:text-green-200 underline">
+                Download full results as CSV
+            </button>
+        </div>
+
         <div id="status-log" class="mt-6 text-xs text-gray-400 font-mono max-h-96 overflow-y-auto bg-black p-3 rounded border border-gray-800"></div>
     </div>
 
@@ -191,6 +230,13 @@
         const destinationPlaylistSelect = document.getElementById('destination-playlist-id');
         const createPlaylistNameWrap = document.getElementById('create-playlist-name-wrap');
         const maxOutputTracksSelect = document.getElementById('max-output-tracks');
+        const analyseLikedButton = document.getElementById('analyse-liked-btn');
+        const artistCountModeSelect = document.getElementById('artist-count-mode');
+        const artistResultLimitSelect = document.getElementById('artist-result-limit');
+        const artistAnalysisSummary = document.getElementById('artist-analysis-summary');
+        const artistAnalysisResults = document.getElementById('artist-analysis-results');
+        const downloadArtistCsvButton = document.getElementById('download-artist-csv-btn');
+        let latestArtistAnalysis = [];
 
         function escapeHtml(value) {
             return String(value)
@@ -226,7 +272,7 @@
             }
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.3.1");
+        logger("⚙️ System Booted: Running Live Production Version v1.4.0");
         loadStoredBlacklist();
         attemptAutoLoadDefaultBlacklist();
         restoreStoredRefreshToken();
@@ -704,6 +750,7 @@
             loginButton.innerText = label;
             loginButton.className = "w-full bg-gray-700 text-white font-bold py-2 px-4 rounded mb-6";
             loadPlaylistsButton.removeAttribute('disabled');
+            analyseLikedButton.removeAttribute('disabled');
         }
 
         function applyTokenData(data) {
@@ -1509,6 +1556,169 @@
                 runButton.innerText = "9. Deep-Scan & Build Playlist";
                 checkReady();
             }
+        });
+
+        function renderArtistAnalysis(artistRows, totalLikedTracks, countMode) {
+            const resultLimit = Number(artistResultLimitSelect.value);
+            const visibleRows = resultLimit > 0 ? artistRows.slice(0, resultLimit) : artistRows;
+            const modeLabel = countMode === "primary"
+                ? "Primary artist only"
+                : "Every credited artist";
+
+            artistAnalysisSummary.dataset.totalTracks = String(totalLikedTracks);
+            artistAnalysisSummary.innerHTML = `
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div><span class="block text-xs text-gray-500">Liked tracks</span><strong>${totalLikedTracks.toLocaleString()}</strong></div>
+                    <div><span class="block text-xs text-gray-500">Unique artists</span><strong>${artistRows.length.toLocaleString()}</strong></div>
+                    <div class="col-span-2"><span class="block text-xs text-gray-500">Counting method</span><strong>${escapeHtml(modeLabel)}</strong></div>
+                </div>
+            `;
+
+            const tableRows = visibleRows.map((artist, index) => {
+                const percentage = totalLikedTracks > 0
+                    ? ((artist.count / totalLikedTracks) * 100).toFixed(1)
+                    : "0.0";
+                const artistName = artist.url
+                    ? `<a href="${escapeHtml(artist.url)}" target="_blank" rel="noopener noreferrer" class="text-green-300 hover:text-green-200 underline">${escapeHtml(artist.name)}</a>`
+                    : escapeHtml(artist.name);
+
+                return `
+                    <tr class="border-t border-gray-700">
+                        <td class="py-2 px-3 text-gray-500 text-right">${index + 1}</td>
+                        <td class="py-2 px-3">${artistName}</td>
+                        <td class="py-2 px-3 text-right font-semibold">${artist.count.toLocaleString()}</td>
+                        <td class="py-2 px-3 text-right text-gray-400">${percentage}%</td>
+                    </tr>
+                `;
+            }).join("");
+
+            artistAnalysisResults.innerHTML = `
+                <table class="w-full text-sm bg-gray-900">
+                    <thead class="sticky top-0 bg-gray-800 text-xs text-gray-400">
+                        <tr>
+                            <th class="py-2 px-3 text-right">#</th>
+                            <th class="py-2 px-3 text-left">Artist</th>
+                            <th class="py-2 px-3 text-right">Tracks</th>
+                            <th class="py-2 px-3 text-right">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            `;
+
+            artistAnalysisSummary.classList.remove("hidden");
+            artistAnalysisResults.classList.remove("hidden");
+            downloadArtistCsvButton.classList.remove("hidden");
+        }
+
+        async function analyseLikedSongs() {
+            const countMode = artistCountModeSelect.value;
+            const artistsByKey = new Map();
+            let totalLikedTracks = 0;
+            let offset = 0;
+            const limit = 50;
+            let keepFetching = true;
+
+            analyseLikedButton.setAttribute('disabled', 'disabled');
+            analyseLikedButton.innerText = "Analysing...";
+            artistAnalysisSummary.classList.add("hidden");
+            artistAnalysisResults.classList.add("hidden");
+            downloadArtistCsvButton.classList.add("hidden");
+            latestArtistAnalysis = [];
+
+            logger(`🎤 Analysing Liked Songs (${countMode === "primary" ? "primary artist only" : "every credited artist"})...`);
+
+            try {
+                while (keepFetching) {
+                    const response = await spotifyFetch(URL_API + `/me/tracks?limit=${limit}&offset=${offset}`);
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok) {
+                        throw new Error(`Liked Songs analysis failed: ${data.error?.message || 'Unknown Spotify API error'}`);
+                    }
+
+                    const items = data.items || [];
+
+                    for (const item of items) {
+                        const track = item.track;
+
+                        if (!track || track.type !== "track" || track.is_local) {
+                            continue;
+                        }
+
+                        totalLikedTracks++;
+                        const creditedArtists = Array.isArray(track.artists) ? track.artists : [];
+                        const artistsToCount = countMode === "primary"
+                            ? creditedArtists.slice(0, 1)
+                            : creditedArtists;
+
+                        for (const artist of artistsToCount) {
+                            const key = artist.id || String(artist.name || "Unknown Artist").toLowerCase();
+                            const existing = artistsByKey.get(key);
+
+                            if (existing) {
+                                existing.count++;
+                            } else {
+                                artistsByKey.set(key, {
+                                    id: artist.id || "",
+                                    name: artist.name || "Unknown Artist",
+                                    url: artist.external_urls?.spotify || "",
+                                    count: 1
+                                });
+                            }
+                        }
+                    }
+
+                    offset += items.length;
+                    logger(`🎧 Analysed ${offset.toLocaleString()} saved items...`);
+                    keepFetching = Boolean(data.next) && items.length > 0;
+                }
+
+                latestArtistAnalysis = Array.from(artistsByKey.values()).sort((a, b) =>
+                    b.count - a.count || a.name.localeCompare(b.name)
+                );
+
+                renderArtistAnalysis(latestArtistAnalysis, totalLikedTracks, countMode);
+                logger(`✅ Analysis complete: ${totalLikedTracks.toLocaleString()} liked tracks and ${latestArtistAnalysis.length.toLocaleString()} unique artists.`);
+            } catch (err) {
+                logger(`❌ ${err.message}`);
+            } finally {
+                analyseLikedButton.removeAttribute('disabled');
+                analyseLikedButton.innerText = "Analyse My Liked Songs";
+            }
+        }
+
+        analyseLikedButton.addEventListener('click', analyseLikedSongs);
+
+        artistResultLimitSelect.addEventListener('change', () => {
+            if (latestArtistAnalysis.length > 0) {
+                const totalLikedTracks = Number(artistAnalysisSummary.dataset.totalTracks || 0);
+                renderArtistAnalysis(latestArtistAnalysis, totalLikedTracks, artistCountModeSelect.value);
+            }
+        });
+
+        downloadArtistCsvButton.addEventListener('click', () => {
+            if (latestArtistAnalysis.length === 0) {
+                return;
+            }
+
+            const escapeCsv = value => `"${String(value).replace(/"/g, '""')}"`;
+            const rows = [["Rank", "Artist", "Liked tracks", "Spotify URL"]];
+
+            latestArtistAnalysis.forEach((artist, index) => {
+                rows.push([index + 1, artist.name, artist.count, artist.url]);
+            });
+
+            const csv = rows.map(row => row.map(escapeCsv).join(",")).join("\r\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `spotify-liked-artists-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
         });
 
         function generateRandomString(length) { 
