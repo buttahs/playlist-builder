@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+          <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.4.0)</title>
+    <title>Organic Spotify Playlist Builder (v1.5.0)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-2xl w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.4.0</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.5.0</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -87,6 +87,16 @@
             </p>
         </div>
 
+        <div class="mb-6 bg-blue-900 bg-opacity-20 border border-blue-700 rounded p-4">
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" id="review-before-add" checked class="mt-1 accent-blue-500">
+                <span>
+                    <span class="block text-sm font-semibold text-blue-200">Review tracks before adding</span>
+                    <span class="block mt-1 text-xs text-gray-400">Build a candidate queue first. Approve, reject or save tracks for later before anything changes in Spotify.</span>
+                </span>
+            </label>
+        </div>
+
         <div id="destination-playlist-wrap" class="mb-6">
             <label class="block text-sm font-medium mb-2 text-gray-400">8. Destination Playlist</label>
             <select id="destination-playlist-id" class="w-full bg-gray-700 border border-gray-600 rounded py-2 px-3 text-white focus:outline-none focus:border-green-500 text-sm cursor-pointer">
@@ -146,8 +156,23 @@
         </div>
 
         <button id="run-btn" disabled class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition cursor-pointer">
-            9. Deep-Scan & Build Playlist
+            10. Scan & Build Review Queue
         </button>
+
+        <div id="review-panel" class="hidden mt-8 pt-6 border-t border-gray-700">
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <div>
+                    <h2 class="text-lg font-bold text-blue-300">Discovery Review Queue</h2>
+                    <p id="review-summary" class="text-xs text-gray-400 mt-1"></p>
+                </div>
+                <button id="clear-decisions-btn" type="button" class="text-xs text-red-300 hover:text-red-200 underline whitespace-nowrap">Clear memory</button>
+            </div>
+            <div id="review-list" class="mt-4 space-y-3"></div>
+            <div class="sticky bottom-0 mt-4 bg-gray-800 border border-gray-600 rounded p-3 shadow-xl">
+                <div id="review-counts" class="text-xs text-gray-300 mb-3"></div>
+                <button id="add-approved-btn" type="button" disabled class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded transition">Add approved tracks to Spotify</button>
+            </div>
+        </div>
 
         <div class="mt-8 pt-6 border-t border-gray-700">
             <div class="flex items-center justify-between mb-2">
@@ -204,6 +229,7 @@
         const LOCAL_STORAGE_REFRESH_TOKEN_KEY = "hmd_spotify_refresh_token_v1";
         const LOCAL_STORAGE_AUTH_STATE_KEY = "hmd_spotify_auth_state_v1";
         const LOCAL_STORAGE_CODE_VERIFIER_KEY = "hmd_spotify_code_verifier_v1";
+        const LOCAL_STORAGE_TRACK_DECISIONS_KEY = "hmd_track_decisions_v1";
         
         let accessToken = null;
         let refreshToken = null;
@@ -212,6 +238,9 @@
         let userPlaylists = [];
         let blacklistSource = "none";
         let blacklistLastUpdated = null;
+        let reviewCandidates = [];
+        let pendingReviewContext = null;
+        let trackDecisions = loadTrackDecisions();
 
         const logDiv = document.getElementById('status-log');
         const loginButton = document.getElementById('login-btn');
@@ -236,6 +265,13 @@
         const artistAnalysisSummary = document.getElementById('artist-analysis-summary');
         const artistAnalysisResults = document.getElementById('artist-analysis-results');
         const downloadArtistCsvButton = document.getElementById('download-artist-csv-btn');
+        const reviewBeforeAddCheckbox = document.getElementById('review-before-add');
+        const reviewPanel = document.getElementById('review-panel');
+        const reviewList = document.getElementById('review-list');
+        const reviewSummary = document.getElementById('review-summary');
+        const reviewCounts = document.getElementById('review-counts');
+        const addApprovedButton = document.getElementById('add-approved-btn');
+        const clearDecisionsButton = document.getElementById('clear-decisions-btn');
         let latestArtistAnalysis = [];
 
         function escapeHtml(value) {
@@ -246,6 +282,85 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
+
+        function loadTrackDecisions() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(LOCAL_STORAGE_TRACK_DECISIONS_KEY) || "{}");
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function saveTrackDecisions() {
+            localStorage.setItem(LOCAL_STORAGE_TRACK_DECISIONS_KEY, JSON.stringify(trackDecisions));
+        }
+
+        function setTrackDecision(trackId, decision) {
+            trackDecisions[trackId] = { decision, updatedAt: new Date().toISOString() };
+            saveTrackDecisions();
+            renderReviewQueue();
+        }
+
+        function getTrackDecision(trackId) {
+            return trackDecisions[trackId]?.decision || "later";
+        }
+
+        function renderReviewQueue() {
+            if (!reviewCandidates.length) {
+                reviewPanel.classList.add("hidden");
+                return;
+            }
+
+            reviewPanel.classList.remove("hidden");
+            const counts = { approve: 0, reject: 0, later: 0 };
+            reviewCandidates.forEach(candidate => counts[getTrackDecision(candidate.id)]++);
+            reviewSummary.innerText = `${reviewCandidates.length} candidates found. Decisions are remembered on this device.`;
+            reviewCounts.innerText = `${counts.approve} approved · ${counts.reject} rejected · ${counts.later} later`;
+            addApprovedButton.disabled = counts.approve === 0;
+
+            reviewList.innerHTML = reviewCandidates.map((candidate, index) => {
+                const decision = getTrackDecision(candidate.id);
+                const image = candidate.image
+                    ? `<img src="${escapeHtml(candidate.image)}" alt="" class="w-20 h-20 rounded object-cover bg-gray-700 flex-shrink-0">`
+                    : `<div class="w-20 h-20 rounded bg-gray-700 flex items-center justify-center text-2xl flex-shrink-0">🎵</div>`;
+                const button = (value, label, activeClass) => `<button type="button" data-track-id="${escapeHtml(candidate.id)}" data-decision="${value}" class="decision-btn text-xs px-3 py-2 rounded border ${decision === value ? activeClass : 'border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700'}">${label}</button>`;
+                return `<article class="bg-gray-900 border ${decision === 'approve' ? 'border-green-600' : decision === 'reject' ? 'border-red-700 opacity-70' : 'border-gray-700'} rounded p-3">
+                    <div class="flex gap-3">
+                        ${image}
+                        <div class="min-w-0 flex-1">
+                            <div class="flex justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-100 truncate">${escapeHtml(candidate.name)}</p>
+                                    <p class="text-sm text-gray-400 truncate">${escapeHtml(candidate.artists.join(', '))}</p>
+                                </div>
+                                <span class="text-xs text-gray-500">${index + 1}/${reviewCandidates.length}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">${escapeHtml(candidate.releaseDate)} · ${escapeHtml(candidate.duration)} · from ${escapeHtml(candidate.sourceName)}</p>
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                ${button('approve', '✓ Approve', 'border-green-500 bg-green-900 text-green-200')}
+                                ${button('reject', '✕ Reject', 'border-red-500 bg-red-900 text-red-200')}
+                                ${button('later', '◷ Later', 'border-yellow-500 bg-yellow-900 text-yellow-200')}
+                                <a href="${escapeHtml(candidate.spotifyUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs px-3 py-2 rounded border border-gray-600 text-blue-300 hover:bg-gray-700">Open Spotify ↗</a>
+                            </div>
+                        </div>
+                    </div>
+                </article>`;
+            }).join('');
+        }
+
+        reviewList.addEventListener('click', event => {
+            const button = event.target.closest('.decision-btn');
+            if (!button) return;
+            setTrackDecision(button.dataset.trackId, button.dataset.decision);
+        });
+
+        clearDecisionsButton.addEventListener('click', () => {
+            trackDecisions = {};
+            saveTrackDecisions();
+            renderReviewQueue();
+            logger('🧠 Track decision memory cleared.');
+        });
 
         function logger(text) {
             logDiv.innerHTML += `&gt; ${escapeHtml(text)}<br>`;
@@ -272,7 +387,7 @@
             }
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.4.0");
+        logger("⚙️ System Booted: Running Live Production Version v1.5.0");
         loadStoredBlacklist();
         attemptAutoLoadDefaultBlacklist();
         restoreStoredRefreshToken();
@@ -1270,7 +1385,7 @@
             }
         }
 
-        async function scanSource(source, targetYear, minDurationMs, maxOutputTracks, destinationTrackUriSet, cleanTrackUris, cleanTrackUriSet, stats) {
+        async function scanSource(source, targetYear, minDurationMs, maxOutputTracks, destinationTrackUriSet, cleanTrackUris, cleanTrackUriSet, candidates, stats) {
             let offset = 0;
             let keepScanning = true;
             const limit = 50;
@@ -1392,6 +1507,17 @@
 
                     cleanTrackUris.push(track.uri);
                     cleanTrackUriSet.add(track.uri);
+                    candidates.push({
+                        id: track.id,
+                        uri: track.uri,
+                        name: track.name || "Unknown track",
+                        artists,
+                        releaseDate,
+                        duration: formatDurationMs(track.duration_ms),
+                        image: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || "",
+                        spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+                        sourceName: source.name
+                    });
 
                     if (maxOutputTracks > 0 && cleanTrackUris.length >= maxOutputTracks) {
                         stats.maxOutputLimitReached = true;
@@ -1450,6 +1576,7 @@
 
             const cleanTrackUris = [];
             const cleanTrackUriSet = new Set();
+            const candidates = [];
             const stats = getScanStatsTemplate();
             let destinationTrackUriSet = new Set();
             stats.sourcesSelected = sources.length;
@@ -1472,6 +1599,7 @@
                         destinationTrackUriSet,
                         cleanTrackUris,
                         cleanTrackUriSet,
+                        candidates,
                         stats
                     );
                 }
@@ -1505,6 +1633,15 @@
                         : `ℹ️ Complete! No organic ${targetYear} tracks found after blacklist, duration and dedupe filters.`;
 
                     logger(noTrackMessage);
+                    return;
+                }
+
+                if (reviewBeforeAddCheckbox.checked) {
+                    reviewCandidates = candidates;
+                    pendingReviewContext = { outputMode, destinationPlaylist, visibility, sources, targetYear, minDurationMs };
+                    renderReviewQueue();
+                    reviewPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+                    logger(`🧐 Review queue ready: ${reviewCandidates.length} candidates. Spotify has not been changed.`);
                     return;
                 }
 
@@ -1553,8 +1690,58 @@
                 logger(`❌ Pipeline Failure: ${err.message}`);
             } finally {
                 runButton.removeAttribute('disabled');
-                runButton.innerText = "9. Deep-Scan & Build Playlist";
+                runButton.innerText = "10. Scan & Build Review Queue";
                 checkReady();
+            }
+        });
+
+        addApprovedButton.addEventListener('click', async () => {
+            if (!pendingReviewContext) {
+                logger('❌ Review context expired. Run the scan again.');
+                return;
+            }
+
+            const approvedUris = reviewCandidates
+                .filter(candidate => getTrackDecision(candidate.id) === 'approve')
+                .map(candidate => candidate.uri);
+
+            if (!approvedUris.length) return;
+
+            const { outputMode, destinationPlaylist, visibility, sources, targetYear, minDurationMs } = pendingReviewContext;
+            addApprovedButton.disabled = true;
+            addApprovedButton.innerText = 'Adding approved tracks...';
+
+            try {
+                let targetPlaylistData = destinationPlaylist;
+                if (outputMode === 'create') {
+                    const outputNameDetails = getOutputBasePlaylistName(sources, targetYear);
+                    const playlistName = await generatePlaylistNameWithVolume(outputNameDetails.baseName, outputNameDetails.forceVolOne);
+                    const playlistRes = await spotifyFetch(URL_API + '/me/playlists', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: playlistName,
+                            description: `Human-reviewed ${targetYear} discoveries. Minimum duration: ${getDurationFilterLabel(minDurationMs)}.`,
+                            public: visibility === 'public'
+                        })
+                    });
+                    const playlistData = await playlistRes.json().catch(() => ({}));
+                    if (!playlistRes.ok) throw new Error(playlistData.error?.message || 'Playlist creation failed');
+                    targetPlaylistData = playlistData;
+                    await addTracksToPlaylist(playlistData.id, approvedUris, false);
+                } else {
+                    await addTracksToPlaylist(destinationPlaylist.id, approvedUris, outputMode === 'replace');
+                }
+
+                logger(`🎉 Added ${approvedUris.length} human-approved tracks.`);
+                if (targetPlaylistData?.external_urls?.spotify) {
+                    loggerHtml(`<a href="${escapeHtml(targetPlaylistData.external_urls.spotify)}" target="_blank" rel="noopener noreferrer" style="color:#34d399;text-decoration:underline;font-weight:bold;">Open updated playlist</a>`);
+                }
+            } catch (error) {
+                logger(`❌ Approved-track addition failed: ${error.message}`);
+            } finally {
+                addApprovedButton.innerText = 'Add approved tracks to Spotify';
+                renderReviewQueue();
             }
         });
 
