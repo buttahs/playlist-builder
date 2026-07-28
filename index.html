@@ -1,4 +1,4 @@
-          <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -230,6 +230,7 @@
         const LOCAL_STORAGE_AUTH_STATE_KEY = "hmd_spotify_auth_state_v1";
         const LOCAL_STORAGE_CODE_VERIFIER_KEY = "hmd_spotify_code_verifier_v1";
         const LOCAL_STORAGE_TRACK_DECISIONS_KEY = "hmd_track_decisions_v1";
+        const LOCAL_STORAGE_DISCOVERY_HISTORY_KEY = "hmd_discovery_history_v1";
         
         let accessToken = null;
         let refreshToken = null;
@@ -241,6 +242,7 @@
         let reviewCandidates = [];
         let pendingReviewContext = null;
         let trackDecisions = loadTrackDecisions();
+        let discoveryHistory = loadDiscoveryHistory();
 
         const logDiv = document.getElementById('status-log');
         const loginButton = document.getElementById('login-btn');
@@ -296,14 +298,91 @@
             localStorage.setItem(LOCAL_STORAGE_TRACK_DECISIONS_KEY, JSON.stringify(trackDecisions));
         }
 
+        function loadDiscoveryHistory() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(LOCAL_STORAGE_DISCOVERY_HISTORY_KEY) || "{}");
+                return parsed && typeof parsed === "object" ? parsed : {};
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function saveDiscoveryHistory() {
+            localStorage.setItem(LOCAL_STORAGE_DISCOVERY_HISTORY_KEY, JSON.stringify(discoveryHistory));
+        }
+
+        function recordDiscovery(candidate) {
+            const now = new Date().toISOString();
+            const existing = discoveryHistory[candidate.id] || {};
+            const historicalSources = new Set(existing.sources || []);
+            (candidate.sourceNames || []).forEach(source => historicalSources.add(source));
+            discoveryHistory[candidate.id] = {
+                firstSeen: existing.firstSeen || now,
+                lastSeen: now,
+                scansSeen: Number(existing.scansSeen || 0) + 1,
+                sources: [...historicalSources],
+                decision: trackDecisions[candidate.id]?.decision || existing.decision || "unreviewed"
+            };
+        }
+
         function setTrackDecision(trackId, decision) {
             trackDecisions[trackId] = { decision, updatedAt: new Date().toISOString() };
+            if (discoveryHistory[trackId]) discoveryHistory[trackId].decision = decision;
             saveTrackDecisions();
+            saveDiscoveryHistory();
             renderReviewQueue();
         }
 
         function getTrackDecision(trackId) {
-            return trackDecisions[trackId]?.decision || "later";
+            return trackDecisions[trackId]?.decision || "unreviewed";
+        }
+
+        function daysSince(dateValue) {
+            if (!dateValue) return null;
+            const date = new Date(dateValue);
+            if (Number.isNaN(date.getTime())) return null;
+            return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
+        }
+
+        function calculateDiscoveryScore(candidate) {
+            const sourceScore = Math.min((candidate.sourceNames?.length || 1) * 10, 40);
+            const releaseAge = daysSince(candidate.releaseDate);
+            const recencyScore = releaseAge !== null && releaseAge <= 14 ? 20 : releaseAge !== null && releaseAge <= 45 ? 10 : 0;
+            const trackPopularity = Number(candidate.popularity || 0);
+            const trackScore = trackPopularity < 25 ? 15 : trackPopularity < 50 ? 8 : 0;
+            const artistPopularity = Number(candidate.artistPopularity || 0);
+            const artistScore = artistPopularity < 35 ? 10 : artistPopularity < 55 ? 5 : 0;
+            const freshScore = getTrackDecision(candidate.id) === "unreviewed" ? 10 : 0;
+            return Math.min(100, sourceScore + recencyScore + trackScore + artistScore + freshScore);
+        }
+
+        function formatFollowers(value) {
+            const number = Number(value || 0);
+            return number ? number.toLocaleString('en-GB') : "Unknown";
+        }
+
+        async function enrichCandidatesWithArtistData(candidates) {
+            const ids = [...new Set(candidates.flatMap(candidate => candidate.artistIds || []).filter(Boolean))];
+            const artistMap = new Map();
+            for (let index = 0; index < ids.length; index += 50) {
+                const batch = ids.slice(index, index + 50);
+                const response = await spotifyFetch(`${URL_API}/artists?ids=${batch.join(',')}`);
+                if (!response.ok) {
+                    logger(`⚠️ Artist intelligence unavailable for one batch (${response.status}). Track review will continue.`);
+                    continue;
+                }
+                const data = await response.json().catch(() => ({}));
+                (data.artists || []).filter(Boolean).forEach(artist => artistMap.set(artist.id, artist));
+            }
+
+            candidates.forEach(candidate => {
+                const artists = (candidate.artistIds || []).map(id => artistMap.get(id)).filter(Boolean);
+                const primary = artists[0];
+                candidate.artistFollowers = primary?.followers?.total || 0;
+                candidate.artistPopularity = primary?.popularity || 0;
+                candidate.genres = [...new Set(artists.flatMap(artist => artist.genres || []))].slice(0, 4);
+                candidate.discoveryScore = calculateDiscoveryScore(candidate);
+            });
         }
 
         function renderReviewQueue() {
@@ -313,19 +392,30 @@
             }
 
             reviewPanel.classList.remove("hidden");
-            const counts = { approve: 0, reject: 0, later: 0 };
+            const counts = { approve: 0, reject: 0, later: 0, unreviewed: 0 };
             reviewCandidates.forEach(candidate => counts[getTrackDecision(candidate.id)]++);
-            reviewSummary.innerText = `${reviewCandidates.length} candidates found. Decisions are remembered on this device.`;
-            reviewCounts.innerText = `${counts.approve} approved · ${counts.reject} rejected · ${counts.later} later`;
+            reviewSummary.innerText = `${reviewCandidates.length} candidates · sorted by Discovery Score · decisions and first-seen history stay on this device.`;
+            reviewCounts.innerText = `${counts.approve} approved · ${counts.reject} rejected · ${counts.later} later · ${counts.unreviewed} unreviewed`;
             addApprovedButton.disabled = counts.approve === 0;
 
-            reviewList.innerHTML = reviewCandidates.map((candidate, index) => {
+            const sortedCandidates = [...reviewCandidates].sort((a, b) =>
+                (b.discoveryScore || 0) - (a.discoveryScore || 0) ||
+                (b.sourceNames?.length || 1) - (a.sourceNames?.length || 1) ||
+                String(b.releaseDate).localeCompare(String(a.releaseDate))
+            );
+
+            reviewList.innerHTML = sortedCandidates.map((candidate, index) => {
                 const decision = getTrackDecision(candidate.id);
+                const history = discoveryHistory[candidate.id] || {};
                 const image = candidate.image
                     ? `<img src="${escapeHtml(candidate.image)}" alt="" class="w-20 h-20 rounded object-cover bg-gray-700 flex-shrink-0">`
                     : `<div class="w-20 h-20 rounded bg-gray-700 flex items-center justify-center text-2xl flex-shrink-0">🎵</div>`;
                 const button = (value, label, activeClass) => `<button type="button" data-track-id="${escapeHtml(candidate.id)}" data-decision="${value}" class="decision-btn text-xs px-3 py-2 rounded border ${decision === value ? activeClass : 'border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700'}">${label}</button>`;
-                return `<article class="bg-gray-900 border ${decision === 'approve' ? 'border-green-600' : decision === 'reject' ? 'border-red-700 opacity-70' : 'border-gray-700'} rounded p-3">
+                const sources = candidate.sourceNames || [candidate.sourceName];
+                const sourceDetails = sources.map(source => `<li>${escapeHtml(source)}</li>`).join('');
+                const genres = candidate.genres?.length ? candidate.genres.map(genre => `<span class="px-2 py-1 rounded bg-gray-800 text-gray-400">${escapeHtml(genre)}</span>`).join('') : '';
+                const firstSeen = history.firstSeen ? new Date(history.firstSeen).toLocaleDateString('en-GB') : 'Today';
+                return `<article class="bg-gray-900 border ${decision === 'approve' ? 'border-green-600' : decision === 'reject' ? 'border-red-700 opacity-70' : decision === 'later' ? 'border-yellow-700' : 'border-gray-700'} rounded p-3">
                     <div class="flex gap-3">
                         ${image}
                         <div class="min-w-0 flex-1">
@@ -334,9 +424,23 @@
                                     <p class="font-semibold text-gray-100 truncate">${escapeHtml(candidate.name)}</p>
                                     <p class="text-sm text-gray-400 truncate">${escapeHtml(candidate.artists.join(', '))}</p>
                                 </div>
-                                <span class="text-xs text-gray-500">${index + 1}/${reviewCandidates.length}</span>
+                                <div class="text-right whitespace-nowrap">
+                                    <span class="inline-block text-xs font-bold px-2 py-1 rounded ${candidate.discoveryScore >= 70 ? 'bg-green-900 text-green-200' : candidate.discoveryScore >= 50 ? 'bg-blue-900 text-blue-200' : 'bg-gray-800 text-gray-300'}">Signal ${candidate.discoveryScore || 0}</span>
+                                    <div class="text-xs text-gray-500 mt-1">${index + 1}/${sortedCandidates.length}</div>
+                                </div>
                             </div>
-                            <p class="text-xs text-gray-500 mt-2">${escapeHtml(candidate.releaseDate)} · ${escapeHtml(candidate.duration)} · from ${escapeHtml(candidate.sourceName)}</p>
+                            <p class="text-xs text-gray-500 mt-2">${escapeHtml(candidate.releaseDate)} · ${escapeHtml(candidate.duration)}</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Track popularity</span><strong class="text-gray-200">${Number(candidate.popularity || 0)}/100</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist followers</span><strong class="text-gray-200">${formatFollowers(candidate.artistFollowers)}</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist popularity</span><strong class="text-gray-200">${Number(candidate.artistPopularity || 0)}/100</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">First seen</span><strong class="text-gray-200">${escapeHtml(firstSeen)}</strong></div>
+                            </div>
+                            <details class="mt-3 text-xs text-gray-400">
+                                <summary class="cursor-pointer text-blue-300">Found in ${sources.length} source${sources.length === 1 ? '' : 's'}</summary>
+                                <ul class="list-disc ml-5 mt-2 space-y-1">${sourceDetails}</ul>
+                            </details>
+                            ${genres ? `<div class="flex flex-wrap gap-1 mt-2 text-xs">${genres}</div>` : ''}
                             <div class="flex flex-wrap gap-2 mt-3">
                                 ${button('approve', '✓ Approve', 'border-green-500 bg-green-900 text-green-200')}
                                 ${button('reject', '✕ Reject', 'border-red-500 bg-red-900 text-red-200')}
@@ -357,9 +461,11 @@
 
         clearDecisionsButton.addEventListener('click', () => {
             trackDecisions = {};
+            discoveryHistory = {};
             saveTrackDecisions();
+            saveDiscoveryHistory();
             renderReviewQueue();
-            logger('🧠 Track decision memory cleared.');
+            logger('🧠 Track decision and discovery memory cleared.');
         });
 
         function logger(text) {
@@ -387,7 +493,7 @@
             }
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.5.0");
+        logger("⚙️ System Booted: Running Live Production Version v1.6.0");
         loadStoredBlacklist();
         attemptAutoLoadDefaultBlacklist();
         restoreStoredRefreshToken();
@@ -1499,7 +1605,11 @@
 
                     if (cleanTrackUriSet.has(track.uri)) {
                         stats.duplicateSkipped++;
-                        logger(`🔁 Skipped Duplicate Across Sources: "${track.name}" by ${artists.join(', ')}`);
+                        const existingCandidate = candidates.find(candidate => candidate.uri === track.uri);
+                        if (existingCandidate && !existingCandidate.sourceNames.includes(source.name)) {
+                            existingCandidate.sourceNames.push(source.name);
+                        }
+                        logger(`📡 Cross-source signal: "${track.name}" also found in ${source.name}`);
                         continue;
                     }
 
@@ -1512,11 +1622,14 @@
                         uri: track.uri,
                         name: track.name || "Unknown track",
                         artists,
+                        artistIds: Array.isArray(track.artists) ? track.artists.map(artist => artist.id).filter(Boolean) : [],
+                        popularity: Number(track.popularity || 0),
                         releaseDate,
                         duration: formatDurationMs(track.duration_ms),
                         image: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || "",
                         spotifyUrl: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
-                        sourceName: source.name
+                        sourceName: source.name,
+                        sourceNames: [source.name]
                     });
 
                     if (maxOutputTracks > 0 && cleanTrackUris.length >= maxOutputTracks) {
@@ -1637,6 +1750,10 @@
                 }
 
                 if (reviewBeforeAddCheckbox.checked) {
+                    logger('🧠 Loading track and artist intelligence...');
+                    await enrichCandidatesWithArtistData(candidates);
+                    candidates.forEach(recordDiscovery);
+                    saveDiscoveryHistory();
                     reviewCandidates = candidates;
                     pendingReviewContext = { outputMode, destinationPlaylist, visibility, sources, targetYear, minDurationMs };
                     renderReviewQueue();
