@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.6.2 Live AI Blocklist)</title>
+    <title>Organic Spotify Playlist Builder (v1.6.3 API-safe Track Intelligence)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-2xl w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.6.2 · Live AI Blocklist</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.6.3 · API-safe Track Intelligence</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -345,20 +345,21 @@
         }
 
         function calculateDiscoveryScore(candidate) {
-            const sourceScore = Math.min((candidate.sourceNames?.length || 1) * 10, 40);
+            // Spotify removed track popularity, artist popularity and artist follower fields
+            // from Web API responses in 2026. The signal therefore uses only data we can
+            // retrieve reliably: source overlap, release recency, repeat scans and review state.
+            const sourceCount = candidate.sourceNames?.length || 1;
+            const sourceScore = Math.min(sourceCount * 15, 45);
             const releaseAge = daysSince(candidate.releaseDate);
-            const recencyScore = releaseAge !== null && releaseAge <= 14 ? 20 : releaseAge !== null && releaseAge <= 45 ? 10 : 0;
-            const trackPopularity = Number(candidate.popularity || 0);
-            const trackScore = trackPopularity < 25 ? 15 : trackPopularity < 50 ? 8 : 0;
-            const artistPopularity = Number(candidate.artistPopularity || 0);
-            const artistScore = artistPopularity < 35 ? 10 : artistPopularity < 55 ? 5 : 0;
+            const recencyScore = releaseAge !== null && releaseAge <= 7 ? 30 : releaseAge !== null && releaseAge <= 14 ? 24 : releaseAge !== null && releaseAge <= 30 ? 16 : releaseAge !== null && releaseAge <= 90 ? 8 : 0;
+            const scansSeen = Number(discoveryHistory[candidate.id]?.scansSeen || 1);
+            const repeatScore = Math.min(Math.max(scansSeen - 1, 0) * 5, 15);
             const freshScore = getTrackDecision(candidate.id) === "unreviewed" ? 10 : 0;
-            return Math.min(100, sourceScore + recencyScore + trackScore + artistScore + freshScore);
+            return Math.min(100, sourceScore + recencyScore + repeatScore + freshScore);
         }
 
-        function formatFollowers(value) {
-            const number = Number(value || 0);
-            return number ? number.toLocaleString('en-GB') : "Unknown";
+        function formatApiMetric(value, suffix = "") {
+            return value === null || value === undefined ? "Unavailable" : `${Number(value).toLocaleString('en-GB')}${suffix}`;
         }
 
         async function enrichCandidatesWithArtistData(candidates) {
@@ -378,8 +379,8 @@
             candidates.forEach(candidate => {
                 const artists = (candidate.artistIds || []).map(id => artistMap.get(id)).filter(Boolean);
                 const primary = artists[0];
-                candidate.artistFollowers = primary?.followers?.total || 0;
-                candidate.artistPopularity = primary?.popularity || 0;
+                candidate.artistFollowers = primary?.followers?.total ?? null;
+                candidate.artistPopularity = primary?.popularity ?? null;
                 candidate.genres = [...new Set(artists.flatMap(artist => artist.genres || []))].slice(0, 4);
                 candidate.discoveryScore = calculateDiscoveryScore(candidate);
             });
@@ -394,7 +395,7 @@
             reviewPanel.classList.remove("hidden");
             const counts = { approve: 0, reject: 0, later: 0, unreviewed: 0 };
             reviewCandidates.forEach(candidate => counts[getTrackDecision(candidate.id)]++);
-            reviewSummary.innerText = `${reviewCandidates.length} candidates · sorted by Discovery Score · decisions and first-seen history stay on this device.`;
+            reviewSummary.innerText = `${reviewCandidates.length} candidates · sorted by Discovery Signal · release date comes from Spotify; scan history stays on this device.`;
             reviewCounts.innerText = `${counts.approve} approved · ${counts.reject} rejected · ${counts.later} later · ${counts.unreviewed} unreviewed`;
             addApprovedButton.disabled = counts.approve === 0;
 
@@ -414,7 +415,7 @@
                 const sources = candidate.sourceNames || [candidate.sourceName];
                 const sourceDetails = sources.map(source => `<li>${escapeHtml(source)}</li>`).join('');
                 const genres = candidate.genres?.length ? candidate.genres.map(genre => `<span class="px-2 py-1 rounded bg-gray-800 text-gray-400">${escapeHtml(genre)}</span>`).join('') : '';
-                const firstSeen = history.firstSeen ? new Date(history.firstSeen).toLocaleDateString('en-GB') : 'Today';
+                const releasedLabel = candidate.releaseDate || 'Unknown';
                 return `<article class="bg-gray-900 border ${decision === 'approve' ? 'border-green-600' : decision === 'reject' ? 'border-red-700 opacity-70' : decision === 'later' ? 'border-yellow-700' : 'border-gray-700'} rounded p-3">
                     <div class="flex gap-3">
                         ${image}
@@ -431,10 +432,10 @@
                             </div>
                             <p class="text-xs text-gray-500 mt-2">${escapeHtml(candidate.releaseDate)} · ${escapeHtml(candidate.duration)}</p>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
-                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Track popularity</span><strong class="text-gray-200">${Number(candidate.popularity || 0)}/100</strong></div>
-                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist followers</span><strong class="text-gray-200">${formatFollowers(candidate.artistFollowers)}</strong></div>
-                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist popularity</span><strong class="text-gray-200">${Number(candidate.artistPopularity || 0)}/100</strong></div>
-                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">First seen</span><strong class="text-gray-200">${escapeHtml(firstSeen)}</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Track popularity</span><strong class="text-gray-200">${formatApiMetric(candidate.popularity, '/100')}</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist followers</span><strong class="text-gray-200">${formatApiMetric(candidate.artistFollowers)}</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Artist popularity</span><strong class="text-gray-200">${formatApiMetric(candidate.artistPopularity, '/100')}</strong></div>
+                                <div class="bg-gray-800 rounded p-2"><span class="block text-gray-500">Released</span><strong class="text-gray-200">${escapeHtml(releasedLabel)}</strong></div>
                             </div>
                             <details class="mt-3 text-xs text-gray-400">
                                 <summary class="cursor-pointer text-blue-300">Found in ${sources.length} source${sources.length === 1 ? '' : 's'}</summary>
@@ -493,7 +494,7 @@
             }
         }
 
-        logger("⚙️ System Booted: Running Live Production Version v1.6.1 Track Intelligence");
+        logger("⚙️ System Booted: Running Live Production Version v1.6.3 API-safe Track Intelligence");
         loadStoredBlacklist();
         attemptAutoLoadDefaultBlacklist();
         restoreStoredRefreshToken();
@@ -1623,7 +1624,7 @@
                         name: track.name || "Unknown track",
                         artists,
                         artistIds: Array.isArray(track.artists) ? track.artists.map(artist => artist.id).filter(Boolean) : [],
-                        popularity: Number(track.popularity || 0),
+                        popularity: track.popularity ?? null,
                         releaseDate,
                         duration: formatDurationMs(track.duration_ms),
                         image: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || "",
