@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organic Spotify Playlist Builder (v1.6.1 Track Intelligence)</title>
+    <title>Organic Spotify Playlist Builder (v1.6.2 Live AI Blocklist)</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
@@ -12,7 +12,7 @@
     <div class="max-w-2xl w-full bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700">
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-green-400">Human Music Discoverer</h1>
-            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.6.1 · Track Intelligence</span>
+            <span class="text-xs bg-gray-700 text-gray-300 font-mono px-2 py-1 rounded border border-gray-600">v1.6.2 · Live AI Blocklist</span>
         </div>
         
         <button id="login-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition cursor-pointer">
@@ -20,16 +20,16 @@
         </button>
 
         <div class="mb-6">
-            <label class="block text-sm font-medium mb-2 text-gray-400">2. Load / Override AI Blacklist CSV</label>
+            <label class="block text-sm font-medium mb-2 text-gray-400">2. Live AI Blocklist</label>
             <input type="file" id="csv-file" accept=".csv" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-gray-200 hover:file:bg-gray-600 cursor-pointer">
             <p class="mt-2 text-xs text-gray-500 leading-relaxed">
-                Add a <span class="font-mono text-gray-300">blacklist.csv</span> file next to this index file in GitHub to auto-load it. Manual uploads override the default and are remembered in this browser.
+                The community-maintained CennoxX blocklist loads automatically from GitHub whenever the app opens. A saved browser copy is used if the live file is unavailable. Manual CSV uploads remain available as an emergency override.
             </p>
             <div class="mt-2">
                 <p id="blacklist-status" class="text-xs text-gray-500">No blacklist loaded yet.</p>
                 <div class="flex gap-3 mt-2">
                     <button id="load-default-blacklist-btn" type="button" class="text-xs text-green-300 hover:text-green-200 underline">
-                        Load default blacklist
+                        Refresh live blocklist
                     </button>
                     <button id="clear-blacklist-btn" type="button" class="hidden text-xs text-red-300 hover:text-red-200 underline">
                         Clear saved blacklist
@@ -223,7 +223,7 @@
         const URL_ACCOUNTS = "https://accounts.spotify.com";
         const URL_API = "https://api.spotify.com/v1";
 
-        const DEFAULT_BLACKLIST_URL = "blacklist.csv";
+        const DEFAULT_BLACKLIST_URL = "https://raw.githubusercontent.com/CennoxX/spotify-ai-blocker/refs/heads/main/SpotifyAiArtists.csv";
         const LOCAL_STORAGE_BLACKLIST_KEY = "hmd_ai_artist_ids_v1";
         const LOCAL_STORAGE_BLACKLIST_META_KEY = "hmd_ai_artist_ids_meta_v1";
         const LOCAL_STORAGE_REFRESH_TOKEN_KEY = "hmd_spotify_refresh_token_v1";
@@ -892,10 +892,6 @@
         }
 
         async function attemptAutoLoadDefaultBlacklist() {
-            if (aiArtistIds.size > 0) {
-                return;
-            }
-
             await loadDefaultBlacklist(false);
         }
 
@@ -905,13 +901,17 @@
                     logger(`📥 Loading default blacklist from ${DEFAULT_BLACKLIST_URL}...`);
                 }
 
-                const response = await fetch(DEFAULT_BLACKLIST_URL, { cache: "no-store" });
+                const liveUrl = `${DEFAULT_BLACKLIST_URL}?refresh=${Date.now()}`;
+                const response = await fetch(liveUrl, {
+                    cache: "no-store",
+                    headers: { "Accept": "text/csv,text/plain,*/*" }
+                });
 
                 if (!response.ok) {
                     if (userRequested) {
-                        logger(`❌ Default blacklist not found at ${DEFAULT_BLACKLIST_URL}. Add blacklist.csv next to index.html in GitHub.`);
+                        logger(`❌ Live community blacklist could not be loaded (${response.status}). Keeping the saved browser copy.`);
                     } else {
-                        logger(`ℹ️ No default ${DEFAULT_BLACKLIST_URL} found. Upload a CSV manually to begin.`);
+                        logger(`⚠️ Live community blacklist unavailable. ${aiArtistIds.size > 0 ? "Using the saved browser copy." : "No cached blacklist is available."}`);
                     }
 
                     return;
@@ -926,24 +926,24 @@
                 const parsedIds = parseBlacklistRows(parsed.data);
 
                 if (!parsedIds.length) {
-                    logger(`⚠️ Default blacklist loaded but no valid Spotify artist IDs were found.`);
+                    logger(`⚠️ Live community blacklist returned no valid Spotify artist IDs. Keeping the saved browser copy.`);
                     return;
                 }
 
                 aiArtistIds = new Set(parsedIds);
-                blacklistSource = `GitHub default: ${DEFAULT_BLACKLIST_URL}`;
+                blacklistSource = "Live CennoxX community list";
                 blacklistLastUpdated = new Date().toISOString();
 
                 saveBlacklistToLocalStorage();
                 updateBlacklistStatus();
                 checkReady();
 
-                logger(`✅ Default blacklist loaded from ${DEFAULT_BLACKLIST_URL}. Total AI profiles loaded: ${aiArtistIds.size}`);
+                logger(`✅ Live community blacklist refreshed. Total reported AI profiles loaded: ${aiArtistIds.size}`);
             } catch(err) {
                 if (userRequested) {
-                    logger(`❌ Default Blacklist Load Failure: ${err.message}`);
+                    logger(`❌ Live Blacklist Refresh Failure: ${err.message}. Keeping the saved browser copy.`);
                 } else {
-                    logger("ℹ️ Default blacklist could not be auto-loaded. Upload a CSV manually if needed.");
+                    logger(`⚠️ Live blacklist could not be refreshed. ${aiArtistIds.size > 0 ? "Using the saved browser copy." : "Upload a CSV manually before scanning."}`);
                 }
             }
         }
@@ -956,7 +956,7 @@
 
                 setStatus(
                     blacklistStatus,
-                    `${aiArtistIds.size} AI artist IDs loaded · Source: ${sourceLabel} · Last updated: ${formatStoredDate(blacklistLastUpdated)}`,
+                    `${aiArtistIds.size} reported AI artist IDs loaded · Source: ${sourceLabel} · Last updated: ${formatStoredDate(blacklistLastUpdated)}`,
                     "good"
                 );
 
